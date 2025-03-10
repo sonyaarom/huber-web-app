@@ -18,6 +18,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+
+def remove_extra_spaces(text):
+    return ' '.join(text.split())
+
+
 def get_html_content(url: str, timeout: int = 10) -> Optional[str]:
     """
     Retrieve HTML content from the given URL with improved error handling.
@@ -42,21 +48,11 @@ def get_html_content(url: str, timeout: int = 10) -> Optional[str]:
         return None
 
 def extract_info(html_content: str) -> Dict[str, str]:
-    """
-    Extracts title and main content from HTML with more robust parsing.
-    
-    Args:
-        html_content (str): HTML content to parse
-    
-    Returns:
-        Dict[str, str]: Dictionary with 'title' and 'content' keys
-    """
     if not html_content:
         return {"title": "Title not found", "content": "Main content not found"}
     
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # More comprehensive title extraction
     title_candidates = [
         soup.find('h2', class_='documentFirstHeading'),
         soup.find('h1'),
@@ -65,28 +61,24 @@ def extract_info(html_content: str) -> Dict[str, str]:
     ]
     title_tag = next((tag for tag in title_candidates if tag), None)
     title_text = title_tag.get_text(strip=True) if title_tag else "Title not found"
-    
-    # More robust content extraction
-    content_candidates = [
-        soup.find('div', id='parent-fieldname-text'),
-        soup.find('div', id='content-core'),
-        soup.find('main'),
-        soup.find('article'),
-        soup.body
-    ]
-    main_content = next((div for div in content_candidates if div), None)
-    
+    if title_tag:
+        title_text = remove_extra_spaces(title_text)
+    main_content = soup.find('main') or soup.find('article') or soup.body
     if main_content:
-        # Remove unwanted tags
         for tag in main_content.find_all(["script", "style", "nav", "header", "footer"]):
             tag.decompose()
         
-        # Clean up text
-        content_text = re.sub(r'\s+', ' ', main_content.get_text(strip=True))
+        # Ensure line breaks are preserved
+        for br in main_content.find_all("br"):
+            br.replace_with("\n")
+
+        content_text = ' '.join(main_content.stripped_strings)
+        content_text = remove_extra_spaces(content_text)
     else:
         content_text = "Main content not found"
     
     return {"title": title_text, "content": f"{title_text} {content_text}"}
+
 
 def upsert_page_content(conn, page_content, record_id, url, html, extracted, now):
     """
@@ -175,6 +167,7 @@ def main():
                     continue
                 
                 extracted = extract_info(html)
+                
                 now = datetime.utcnow()
                 
                 # Transactional insert with conflict handling
