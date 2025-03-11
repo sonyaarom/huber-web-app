@@ -118,10 +118,9 @@ resource "null_resource" "create_page_embeddings_table" {
         embedding_model TEXT,
         embedding_vector VECTOR(1536),
         raw_text TEXT,
-        PRIMARY KEY (id, split_id)  -- ✅ Composite primary key
+        PRIMARY KEY (id, split_id)  
     );
 
-    -- ✅ Fix: Explicitly define operator class for HNSW index
     CREATE INDEX IF NOT EXISTS idx_page_embeddings_vector 
     ON public.page_embeddings 
     USING hnsw (embedding_vector vector_l2_ops);
