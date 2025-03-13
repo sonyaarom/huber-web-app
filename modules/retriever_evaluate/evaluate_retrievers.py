@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 
-# Import for reranker
+
 try:
     from sentence_transformers import CrossEncoder
     CROSS_ENCODER_AVAILABLE = True
@@ -24,9 +24,6 @@ except ImportError:
 from .config import settings
 from .utils.embeddings_utils import EmbeddingGenerator
 from .utils.metrics import calculate_mrr, calculate_hit_at_k
-
-# Default reranker model
-DEFAULT_RERANKER_MODEL = 'cross-encoder/ms-marco-MiniLM-L-6-v2'
 
 # Configure logging
 logging.basicConfig(
@@ -40,18 +37,19 @@ class RetrieverEvaluator:
     
     def __init__(
         self, 
-        qa_pairs_path: str = "qa_pairs_filtered.csv",
-        top_k: int = 10,
+        qa_pairs_path: str = settings.qa_pairs_path,
+        top_k: int = settings.top_k,
         wandb_project: str = "retriever-evaluation",
         wandb_entity: str = None,
         table_filter: Optional[str] = None,
         specific_tables: Optional[List[str]] = None,
         use_reranker: bool = False,
-        reranker_model: str = DEFAULT_RERANKER_MODEL,
+        reranker_model: str = settings.reranker_model,
         reranker_tables: Optional[List[str]] = None,
         use_hybrid_search: bool = False,
-        hybrid_alpha: Union[float, List[float]] = 0.5,
-        hybrid_tables: Optional[List[str]] = None
+        hybrid_alpha: Union[float, List[float]] = settings.hybrid_alpha,
+        hybrid_tables: Optional[List[str]] = None,
+        threshold: Optional[float] = settings.threshold
     ):
         """
         Initialize the evaluator.
@@ -81,6 +79,7 @@ class RetrieverEvaluator:
         self.reranker_model = reranker_model
         self.reranker_tables = reranker_tables
         self.use_hybrid_search = use_hybrid_search
+        self.threshold = threshold
         
         # Convert single alpha to list for consistent handling
         if isinstance(hybrid_alpha, (int, float)):
@@ -105,7 +104,7 @@ class RetrieverEvaluator:
                     logger.error(f"Failed to initialize reranker: {e}")
                     self.use_reranker = False
         
-        # We'll create embedding generators on-demand based on table names
+        # Create embedding generators on-demand based on table names
         self.embedding_generators = {}
         
         # Load QA pairs
@@ -172,6 +171,7 @@ class RetrieverEvaluator:
     
     def _get_test_tables(self) -> List[str]:
         """Get all tables starting with 'test_' from PostgreSQL."""
+        logger.info("Getting test tables from PostgreSQL")
         # If specific tables are provided, use them directly
         if self.specific_tables:
             logger.info(f"Using specific tables: {', '.join(self.specific_tables)}")
@@ -313,6 +313,7 @@ class RetrieverEvaluator:
         
         # Determine the number of results to retrieve
         retrieval_limit = self.top_k
+        # If reranking is used, we need more results to rerank
         if self.use_reranker:
             retrieval_limit = self.top_k * 2
         if should_use_hybrid:
@@ -378,6 +379,7 @@ class RetrieverEvaluator:
                 scores = [row[2] for row in vector_results]
                 contents_list = [row[1] for row in vector_results]
             else:
+                logger.info(f"Found {len(all_doc_ids)} overlapping document IDs between BM25 and vector search results for table {table_name}")
                 # Create combined scores
                 combined_scores = {}
                 for doc_id in all_doc_ids:
@@ -407,7 +409,7 @@ class RetrieverEvaluator:
                 # Get top_k results
                 top_results = sorted_results[:retrieval_limit]
                 
-                # Create a list of document IDs and scores
+                # Get doc_ids and scores
                 doc_ids = [doc_id for doc_id, _ in top_results]
                 scores = [score for _, score in top_results]
                 
@@ -460,16 +462,35 @@ class RetrieverEvaluator:
             id_score_pairs = list(zip(doc_ids, rerank_scores))
             id_score_pairs.sort(key=lambda x: x[1], reverse=True)
             
-            # Take only top_k after reranking
-            id_score_pairs = id_score_pairs[:self.top_k]
-            
-            # Extract final doc_ids and scores
+            # Extract all doc_ids and scores
             doc_ids = [pair[0] for pair in id_score_pairs]
             scores = [pair[1] for pair in id_score_pairs]
-        else:
-            # Limit to top_k
-            doc_ids = doc_ids[:self.top_k]
-            scores = scores[:self.top_k]
+        
+        # Apply threshold filtering if specified
+        if self.threshold is not None:
+            # Filter results by threshold
+            filtered_results = [(doc_id, score) for doc_id, score in zip(doc_ids, scores) if score > self.threshold]
+            
+            if filtered_results:
+                # If we have results above threshold, use them
+                doc_ids = [doc_id for doc_id, _ in filtered_results]
+                scores = [score for _, score in filtered_results]
+                logger.info(f"Filtered to {len(doc_ids)} results above threshold {self.threshold} for table {table_name}")
+            else:
+                # If no results above threshold, log a warning but return the best result we have
+                # This ensures we always return at least one result
+                if doc_ids:
+                    best_id = doc_ids[0]
+                    best_score = scores[0]
+                    doc_ids = [best_id]
+                    scores = [best_score]
+                    logger.warning(f"No results above threshold {self.threshold} for table {table_name}. Returning best result with score {best_score}")
+                else:
+                    logger.warning(f"No results found for table {table_name}")
+        
+        # Limit to top_k
+        doc_ids = doc_ids[:self.top_k]
+        scores = scores[:self.top_k]
         
         query_time = time.time() - start_time
         
@@ -682,13 +703,8 @@ class RetrieverEvaluator:
                 
                 # Finish this wandb run
                 wandb.finish()
+
         
-        # Create a summary CSV
-        results_df = pd.DataFrame(all_results)
-        results_path = Path(__file__).parent / f"evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        results_df.to_csv(results_path, index=False)
-        
-        logger.info(f"Evaluation complete. Results saved to {results_path}")
     
     def cleanup(self):
         """Clean up resources."""

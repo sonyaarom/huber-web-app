@@ -1,20 +1,8 @@
-import os
-from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from typing import Optional, List
-
-# Get the absolute path to the .env file
-current_dir = Path(__file__).parent
-env_file_path = 'data-engineering-huber/.venv'
+from typing import Optional, List, Union
 
 class Settings(BaseSettings):
-    url: Optional[str] = Field('https://www.wiwi.hu-berlin.de/sitemap.xml.gz')
-    pattern: Optional[str] = Field(r'<url>\s*<loc>(.*?)</loc>\s*<lastmod>(.*?)</lastmod>')
-    exclude_extensions: Optional[List[str]] = Field(['.jpg', '.pdf', '.jpeg', '.png'])
-    exclude_patterns: Optional[List[str]] = Field(['view'])
-    include_patterns: Optional[List[str]] = Field(['/en/'])
-    allowed_base_url: Optional[str] = Field('https://www.wiwi.hu-berlin.de')
 
     db_host: str = Field(env='DB_HOST')
     db_port: int = Field(env='DB_PORT')
@@ -23,20 +11,22 @@ class Settings(BaseSettings):
     db_password: str = Field(env='DB_PASSWORD')
     openai_api_key: str = Field(env='OPENAI_API_KEY')
 
+    wandb_entity: str = Field(env='WANDB_ENTITY')
+
+    qa_pairs_path: str = Field(env='QA_PAIRS_PATH')
+    top_k: int = Field(env='TOP_K', default=10)
+    threshold: Optional[float] = Field(env='THRESHOLD', default=None)
+    
+    hybrid_alpha: Union[float, List[float]] = Field(env='HYBRID_ALPHA', default=0.5)
+
+    reranker_model: str = Field(env='RERANKER_MODEL', default='cross-encoder/ms-marco-MiniLM-L-6-v2')
+    
     class Config:
-        env_file = str(env_file_path)
-        env_file_encoding = 'utf-8'
         extra = 'ignore'
         case_sensitive = False  # Make environment variable names case-insensitive
 
-# Print debug information
-print(f"Looking for .env file at: {env_file_path}")
-print(f"File exists: {env_file_path.exists()}")
-if env_file_path.exists():
-    with open(env_file_path, 'r') as f:
-        print(f"File content preview: {f.read()[:100]}...")
-
 settings = Settings()
+
 print("Settings loaded successfully!")
 print(f"DB Host: {settings.db_host}")
 print(f"DB Port: {settings.db_port}")
