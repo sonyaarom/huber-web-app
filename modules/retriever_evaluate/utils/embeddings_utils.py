@@ -1,6 +1,5 @@
 from transformers import AutoTokenizer, AutoModel
 import torch
-from openai import OpenAI
 import os
 from ..config import settings
 from logging import getLogger
@@ -138,16 +137,4 @@ class EmbeddingGenerator:
                 torch.cuda.empty_cache()
                 logger.info("Model deleted and GPU memory cleared")
         
-
-if __name__ == "__main__":
-    # Test the EmbeddingGenerator class
-    texts = [
-        "Hello, world!",
-        "This is a test of the embedding generator."]
-    
-    model_name = "text-embedding-3-small"
-    generator = EmbeddingGenerator(method="openai", model_name=model_name)
-    embeddings = generator.generate_embeddings(texts)
-    print(embeddings)
-    generator.cleanup()
 
