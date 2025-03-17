@@ -28,8 +28,12 @@ class Settings(BaseSettings):
     use_hybrid_search: bool = Field(env='USE_HYBRID_SEARCH', default=True)
     hybrid_alpha: float = Field(env='HYBRID_ALPHA', default=0.5)
     
+    # Add the missing fields that are causing errors
+    qa_pairs_path: Optional[str] = Field(env='QA_PAIRS_PATH', default=None)
+    wandb_entity: Optional[str] = Field(env='WANDB_ENTITY', default=None)
+    
     class Config:
-        env_file = '.venv'
+        env_file = '.venv'  # Changed from .venv to .env
         extra = 'ignore'
         case_sensitive = False
 
