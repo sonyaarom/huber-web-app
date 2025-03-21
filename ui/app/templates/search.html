@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HUBer - Find Sources</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background-color: #f0f2f5;
+            transition: background-color 0.3s ease;
+        }
+
+        body.dark-mode {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        
+        .navbar {
+            background-color: #0b3d91;
+            padding: 15px 20px;
+        }
+        
+        .navbar-brand {
+            color: white;
+            font-weight: 600;
+            font-size: 24px;
+        }
+        
+        .navbar-brand img {
+            height: 40px;
+            margin-right: 10px;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            margin: 0 15px;
+            transition: color 0.3s;
+        }
+        
+        .nav-link:hover {
+            color: white;
+        }
+        
+        .nav-link.active {
+            color: white;
+            font-weight: 600;
+        }
+        
+        .navbar .login-btn {
+            background-color: transparent;
+            border: 2px solid white;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            width: auto;
+            margin-top: 0;
+        }
+        
+        .navbar .login-btn:hover {
+            background-color: white;
+            color: #0b3d91;
+        }
+        
+        .search-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark-mode .search-container {
+            background-color: #2d2d2d;
+        }
+        
+        .search-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .search-header h1 {
+            color: #0b3d91;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .dark-mode .search-header h1 {
+            color: #ffffff;
+        }
+        
+        .search-header p {
+            color: #666;
+        }
+
+        .dark-mode .search-header p {
+            color: #cccccc;
+        }
+        
+        .search-form {
+            margin-bottom: 30px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #0b3d91;
+            border-radius: 30px;
+            font-size: 16px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s;
+        }
+
+        .dark-mode .search-input {
+            background-color: #3d3d3d;
+            color: #ffffff;
+            border-color: #4a4a4a;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 5px 20px rgba(11, 61, 145, 0.2);
+        }
+
+        .search-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #0b3d91;
+            color: white;
+            border: 2px solid #0b3d91;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .search-btn:hover {
+            background-color: #082d6e;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(11, 61, 145, 0.3);
+        }
+        
+        .search-results {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background-color: #f9f9f9;
+        }
+
+        .dark-mode .search-results {
+            background-color: #3d3d3d;
+            border-color: #4a4a4a;
+        }
+        
+        .search-results h3 {
+            color: #0b3d91;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .dark-mode .search-results h3 {
+            color: #ffffff;
+        }
+        
+        .url-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .url-list li {
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+        }
+
+        .dark-mode .url-list li {
+            background-color: #2d2d2d;
+        }
+        
+        .url-list li:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .url-list a {
+            color: #0b3d91;
+            text-decoration: none;
+            font-weight: 500;
+            display: block;
+            word-break: break-all;
+        }
+
+        .dark-mode .url-list a {
+            color: #7aa6ff;
+        }
+        
+        .url-list a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer {
+            background-color: #f0f2f5;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #ddd;
+            margin-top: 50px;
+        }
+
+        .dark-mode .footer {
+            background-color: #1a1a1a;
+            color: #cccccc;
+            border-color: #4a4a4a;
+        }
+
+        /* Settings Panel Styles */
+        .settings-panel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            width: 350px;
+            min-width: 350px;
+        }
+
+        .dark-mode .settings-panel {
+            background-color: #2d2d2d;
+            color: #ffffff;
+        }
+
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: nowrap;
+        }
+
+        .settings-item label {
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #0b3d91;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .close-btn {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .dark-mode .close-btn {
+            color: #cccccc;
+        }
+
+        #fontSizeSelect {
+            width: 120px;
+            min-width: 120px;
+        }
+
+        /* Keep the modal login button style */
+        .modal-body .btn-login {
+            background-color: #0b3d91;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .modal-body .btn-login:hover {
+            background-color: #082d6e;
+        }
+
+        
+        .login-modal-content {
+            border-radius: 0;
+            border: none;
+        }
+
+        .login-modal-header {
+            background-color: #0b3d91;
+            color: white;
+            border-radius: 0;
+            padding: 15px 20px;
+        }
+
+        .login-close {
+            color: white;
+            opacity: 1;
+            font-size: 28px;
+        }
+
+        .login-modal-body {
+            padding: 30px;
+        }
+
+        .login-form-group {
+            margin-bottom: 25px;
+        }
+
+        .login-form-group label {
+            display: block;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .login-checkbox-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .login-checkbox-container input {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+
+        .login-submit-btn {
+            width: 100%;
+            background-color: #0b3d91;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 18px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .forgot-password-container {
+            text-align: right;
+            margin-top: 15px;
+        }
+
+        .forgot-password-link {
+            color: #0b3d91;
+            text-decoration: none;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">
+            <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="HU Logo">
+            HUBer
+        </a>
+        <div class="navbar-nav d-flex flex-row">
+            <a class="nav-link" href="{{ url_for('main.chat') }}">Chat</a>
+            <a class="nav-link active" href="{{ url_for('main.search') }}">Find Sources</a>
+            <a class="nav-link" href="#" id="settings-icon">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+        </div>
+        </div>
+        <div class="ml-auto">
+            <button class="login-btn" data-toggle="modal" data-target="#loginModal">
+                <i class="fas fa-user-circle mr-2"></i> Login
+            </button>
+        </div>
+    </nav>
+    
+    <!-- Search Container -->
+    <div class="search-container">
+        <div class="search-header">
+            <h1>Find Relevant Sources</h1>
+            <p>Enter your question to find relevant sources from Humboldt University's knowledge base.</p>
+        </div>
+        
+        <form id="search-form" class="search-form">
+            <input type="text" id="search-input" class="search-input" placeholder="What would you like to know?" required>
+            <button type="submit" class="search-btn">
+                <i class="fas fa-search mr-2"></i> Search
+            </button>
+        </form>
+        
+        <div id="search-results" class="search-results">
+            <h3>Search Results</h3>
+            <ul id="url-list" class="url-list"></ul>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>© 2025 Humboldt University Berlin. All rights reserved.</p>
+        <p>Questions, complaints, or suggestions? Contact: <strong>s.konchakova@student.hu-berlin.de</strong></p>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settings-panel">
+        <span class="close-btn" id="settings-close-btn">&times;</span>
+        <h3>Settings</h3>
+        <div class="settings-item">
+            <label for="darkModeToggle">Dark Mode</label>
+            <label class="switch">
+                <input type="checkbox" id="darkModeToggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="settings-item">
+            <label for="fontSizeSelect">Font Size</label>
+            <select id="fontSizeSelect" class="form-control">
+                <option value="small">Small</option>
+                <option value="medium" selected>Medium</option>
+                <option value="large">Large</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content login-modal-content">
+                <div class="modal-header login-modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">Login to HUBer</h5>
+                    <button type="button" class="close login-close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body login-modal-body">
+                    <form id="login-form">
+                        <div class="login-form-group">
+                            <label for="username">Username</label>
+                            <input type="text" class="form-control login-input" id="username" placeholder="Enter your username">
+                        </div>
+                        <div class="login-form-group">
+                            <label for="password">Password</label>
+                            <input type="password" class="form-control login-input" id="password" placeholder="Enter your password">
+                        </div>
+                        <div class="login-checkbox-container">
+                            <input type="checkbox" id="rememberMe">
+                            <label for="rememberMe">Remember me</label>
+                        </div>
+                        <button type="submit" class="login-submit-btn">Login</button>
+                        <div class="forgot-password-container">
+                            <a href="#" class="forgot-password-link">Forgot password?</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Handle search form submission
+            $('#search-form').submit(function(e) {
+                e.preventDefault();
+                const question = $('#search-input').val();
+                
+                // Show loading state
+                $('#url-list').html('<li>Searching for relevant sources...</li>');
+                $('#search-results').show();
+                
+                // Send AJAX request to retrieve URLs
+                $.ajax({
+                    type: 'POST',
+                    url: '/retrieve_urls',
+                    data: { 'question': question },
+                    success: function(response) {
+                        $('#url-list').empty();
+                        
+                        if (response.urls && response.urls.length > 0) {
+                            response.urls.forEach(function(url) {
+                                $('#url-list').append(`<li><a href="${url}" target="_blank">${url}</a></li>`);
+                            });
+                        } else {
+                            $('#url-list').html('<li>No relevant sources found. Try a different question.</li>');
+                        }
+                    },
+                    error: function(error) {
+                        $('#url-list').html('<li>Error retrieving sources. Please try again.</li>');
+                        console.error('Error retrieving URLs:', error);
+                    }
+                });
+            });
+            
+            // Handle login form submission
+            $('#login-form').submit(function(e) {
+                e.preventDefault();
+                // Here you would normally send the login data to the server
+                // For now, we'll just close the modal and show an alert
+                $('#loginModal').modal('hide');
+                alert('Login functionality will be implemented soon!');
+            });
+
+            // Settings Panel Functionality
+            const settingsIcon = document.getElementById('settings-icon');
+            const settingsPanel = document.getElementById('settings-panel');
+            const settingsCloseBtn = document.getElementById('settings-close-btn');
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const fontSizeSelect = document.getElementById('fontSizeSelect');
+
+            // Apply saved settings immediately
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.checked = true;
+            }
+            
+            const savedFontSize = localStorage.getItem('fontSize') || 'medium';
+            document.body.style.fontSize = savedFontSize === 'small' ? '12px' :
+                                          savedFontSize === 'medium' ? '16px' : '20px';
+            if (fontSizeSelect) {
+                fontSizeSelect.value = savedFontSize;
+            }
+            
+            settingsIcon.addEventListener('click', () => {
+                settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+            });
+
+            settingsCloseBtn.addEventListener('click', () => {
+                settingsPanel.style.display = 'none';
+            });
+
+            darkModeToggle.addEventListener('change', () => {
+                document.body.classList.toggle('dark-mode');
+                // Save dark mode preference
+                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+            });
+
+            fontSizeSelect.addEventListener('change', (event) => {
+                document.body.style.fontSize = event.target.value === 'small' ? '12px' :
+                                             event.target.value === 'medium' ? '16px' : '20px';
+                // Save font size preference
+                localStorage.setItem('fontSize', event.target.value);
+            });
+
+            // Close settings panel when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
+                    settingsPanel.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

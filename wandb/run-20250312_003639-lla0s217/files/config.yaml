@@ -1,0 +1,61 @@
+_wandb:
+    value:
+        cli_version: 0.19.8
+        m: []
+        python_version: 3.11.7
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 49
+                - 53
+                - 55
+                - 75
+                - 95
+                - 105
+            "2":
+                - 1
+                - 5
+                - 11
+                - 49
+                - 53
+                - 55
+                - 75
+                - 95
+                - 105
+            "3":
+                - 2
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.11.7
+            "5": 0.19.8
+            "6": 4.49.0
+            "8":
+                - 5
+            "12": 0.19.8
+            "13": linux-x86_64
+chunk_size:
+    value: 512
+hybrid_alpha:
+    value: 0.5
+is_recursive:
+    value: true
+is_semantic:
+    value: false
+method:
+    value: openai
+model_name:
+    value: text-embedding-3-large
+qa_pairs_count:
+    value: 51
+reranker_model:
+    value: cross-encoder/ms-marco-MiniLM-L-6-v2
+top_k:
+    value: 10
+use_hybrid_search:
+    value: true
+use_reranker:
+    value: true
