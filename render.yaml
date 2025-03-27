@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: flask-socketio-app
+    env: python
+    buildCommand: ./build.sh
+    startCommand: python -m gunicorn -k eventlet -w 1 wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: PORT
+        value: 10000
+    autoDeploy: true
