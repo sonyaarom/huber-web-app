@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple, Any, Optional
 import torch
 import numpy as np
 from .utils.text_processing import process_text
+from psycopg2.extensions import adapt
 
 # Import local modules
 from .config import settings
@@ -138,9 +139,42 @@ class HybridRetriever:
         else:
             embedding_list = query_embedding  # Already a list
         
+        # Prepare the embedding as a string
+        embedding_str = str(embedding_list)
+        
         # Connect to PostgreSQL
         conn = psycopg2.connect(**self.db_config)
         cursor = conn.cursor()
+        
+        # First, check if pgvector extension is installed
+        try:
+            check_query = "SELECT 1 FROM pg_extension WHERE extname = 'vector';"
+            cursor.execute(check_query)
+            if cursor.fetchone() is None:
+                logger.warning("pgvector extension is not installed in the database")
+        except Exception as e:
+            logger.error(f"Error checking pgvector extension: {e}")
+        
+        # Check PostgreSQL version
+        cursor.execute("SELECT version();")
+        pg_version = cursor.fetchone()[0]
+        logger.info(f"PostgreSQL version: {pg_version}")
+
+        # Check pgvector version
+        try:
+            cursor.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector';")
+            pgvector_version = cursor.fetchone()[0]
+            logger.info(f"pgvector version: {pgvector_version}")
+        except Exception as e:
+            logger.error(f"Error checking pgvector version: {e}")
+        
+        # Check table structure
+        try:
+            cursor.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{self.table_name}';")
+            columns = cursor.fetchall()
+            logger.info(f"Table structure for {self.table_name}: {columns}")
+        except Exception as e:
+            logger.error(f"Error checking table structure: {e}")
         
         # Determine the number of results to retrieve
         retrieval_limit = self.top_k
@@ -151,18 +185,17 @@ class HybridRetriever:
             # For hybrid search, we need more results to merge
             retrieval_limit = self.top_k * 3
         
-        # Vector search
+        # Try a simpler approach with L2 distance
         vector_query = f"""
-            SELECT id, chunk_text, 1 - (embedding <=> %s::vector) AS similarity
+            SELECT id, chunk_text, 
+                   embedding <-> '{embedding_str}'::vector AS distance
             FROM {self.table_name}
-            ORDER BY similarity DESC
+            ORDER BY distance
             LIMIT {retrieval_limit};
         """
         
-        # Convert the embedding list to a string in the format PostgreSQL expects
-        embedding_str = str(embedding_list)
+        cursor.execute(vector_query)
         
-        cursor.execute(vector_query, (embedding_str,))
         vector_results = cursor.fetchall()
         
         if self.use_hybrid_search:

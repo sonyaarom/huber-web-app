@@ -1,0 +1,1 @@
+web: gunicorn -k eventlet -w 1 ui.run:application 

@@ -1,5 +1,5 @@
 from .retriever.retriever import HybridRetriever
-from .generator.main import main_generator
+from .generator.main import main_generator, together_generator
 
 def retrieve_urls(question: str):
     """Retrieve URLs relevant to the question"""
@@ -24,7 +24,7 @@ def rag_main_func(question: str):
     # Join the 'content' field from all results with a space in between
     all_context = " ".join(chunk['content'] for chunk in results)
 
-    response = main_generator(question, all_context)
+    response = together_generator(question, all_context)
     return response
 
 

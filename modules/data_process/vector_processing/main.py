@@ -15,9 +15,9 @@ if hasattr(settings, 'openai_api_key') and settings.openai_api_key:
 def main():
     embeddings = ['text-embedding-3-small']
     # Define a list of chunk sizes to loop through
-    chunk_sizes = [128, 256, 512]
+    chunk_sizes = [512]
     # Include semantic in the list of chunking methods along with others
-    chunking_methods = ['character']
+    chunking_methods = ['recursive']
     
     # Get API key from settings or environment
     api_key = getattr(settings, 'openai_api_key', os.environ.get("OPENAI_API_KEY"))
