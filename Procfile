@@ -1,1 +1,1 @@
-web: gunicorn -k eventlet -w 1 wsgi:application 
+web: gunicorn --worker-class eventlet -w 1 run_ui:app
