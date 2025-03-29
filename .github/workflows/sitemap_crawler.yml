@@ -43,20 +43,44 @@ jobs:
           echo "::group::Crawler Log Output"
           START_TIME=$(date +%s)
           python -m hubert.data_ingestion.huber_crawler.main | tee crawler_output.txt
+          CRAWLER_EXIT_CODE=$?
           END_TIME=$(date +%s)
           echo "::endgroup::"
           
-          # Extract metrics from the output for GitHub Actions summary
+          # Set default values for metrics
+          echo "TOTAL_RUNTIME=$((END_TIME - START_TIME))" >> $GITHUB_ENV
+          echo "TOTAL_URLS=0" >> $GITHUB_ENV
+          echo "NEW_URLS=0" >> $GITHUB_ENV
+          echo "UPDATED_URLS=0" >> $GITHUB_ENV
+          echo "REMOVED_URLS=0" >> $GITHUB_ENV
+          echo "ERRORS=0" >> $GITHUB_ENV
+          
+          # Extract metrics from the output if file exists
           if [ -f "crawler_metrics.json" ]; then
-            echo "TOTAL_RUNTIME=$(jq '.total_runtime_seconds' crawler_metrics.json)" >> $GITHUB_ENV
-            echo "TOTAL_URLS=$(jq '.total_urls_found' crawler_metrics.json)" >> $GITHUB_ENV
-            echo "NEW_URLS=$(jq '.new_urls' crawler_metrics.json)" >> $GITHUB_ENV
-            echo "UPDATED_URLS=$(jq '.updated_urls' crawler_metrics.json)" >> $GITHUB_ENV
-            echo "REMOVED_URLS=$(jq '.removed_urls' crawler_metrics.json)" >> $GITHUB_ENV
-            echo "ERRORS=$(jq '.errors' crawler_metrics.json)" >> $GITHUB_ENV
+            TOTAL_RUNTIME=$(jq -r '.total_runtime_seconds // "not found"' crawler_metrics.json)
+            if [ "$TOTAL_RUNTIME" != "not found" ]; then
+              echo "TOTAL_RUNTIME=$TOTAL_RUNTIME" >> $GITHUB_ENV
+            fi
+            
+            TOTAL_URLS=$(jq -r '.total_urls_found // "0"' crawler_metrics.json)
+            echo "TOTAL_URLS=$TOTAL_URLS" >> $GITHUB_ENV
+            
+            NEW_URLS=$(jq -r '.new_urls // "0"' crawler_metrics.json)
+            echo "NEW_URLS=$NEW_URLS" >> $GITHUB_ENV
+            
+            UPDATED_URLS=$(jq -r '.updated_urls // "0"' crawler_metrics.json)
+            echo "UPDATED_URLS=$UPDATED_URLS" >> $GITHUB_ENV
+            
+            REMOVED_URLS=$(jq -r '.removed_urls // "0"' crawler_metrics.json)
+            echo "REMOVED_URLS=$REMOVED_URLS" >> $GITHUB_ENV
+            
+            ERRORS=$(jq -r '.errors // "0"' crawler_metrics.json)
+            echo "ERRORS=$ERRORS" >> $GITHUB_ENV
           else
-            echo "TOTAL_RUNTIME=$((END_TIME - START_TIME))" >> $GITHUB_ENV
-            echo "No metrics file found. Using fallback timing."
+            echo "No metrics file found. Using default values."
+            if [ $CRAWLER_EXIT_CODE -ne 0 ]; then
+              echo "ERRORS=1" >> $GITHUB_ENV
+            fi
           fi
 
       - name: Create job summary
@@ -72,15 +96,34 @@ jobs:
           echo "- **Removed URLs:** ${{ env.REMOVED_URLS }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Errors:** ${{ env.ERRORS }}" >> $GITHUB_STEP_SUMMARY
           
-      # Store metrics directly in the repository instead of using artifacts
+      # Store metrics files if they exist
       - name: Save metrics to repository
         run: |
           # Create a metrics directory if it doesn't exist
           mkdir -p metrics/$(date +"%Y-%m-%d")
           
-          # Copy metrics files to the directory
-          cp crawler_metrics.json metrics/$(date +"%Y-%m-%d")/
-          cp crawler_output.txt metrics/$(date +"%Y-%m-%d")/
+          # Create a summary file with the extracted metrics
+          echo "{
+            \"date\": \"$(date +"%Y-%m-%d")\",
+            \"total_runtime\": \"${{ env.TOTAL_RUNTIME }}\",
+            \"total_urls\": \"${{ env.TOTAL_URLS }}\",
+            \"new_urls\": \"${{ env.NEW_URLS }}\",
+            \"updated_urls\": \"${{ env.UPDATED_URLS }}\",
+            \"removed_urls\": \"${{ env.REMOVED_URLS }}\",
+            \"errors\": \"${{ env.ERRORS }}\"
+          }" > metrics/$(date +"%Y-%m-%d")/summary.json
+          
+          # Copy crawler output if it exists
+          if [ -f "crawler_output.txt" ]; then
+            cp crawler_output.txt metrics/$(date +"%Y-%m-%d")/
+          else
+            echo "No crawler output file found." > metrics/$(date +"%Y-%m-%d")/crawler_output.txt
+          fi
+          
+          # Copy crawler metrics if it exists
+          if [ -f "crawler_metrics.json" ]; then
+            cp crawler_metrics.json metrics/$(date +"%Y-%m-%d")/
+          fi
 
       - name: Update historical metrics
         run: |
