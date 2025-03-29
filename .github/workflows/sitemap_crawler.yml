@@ -72,13 +72,15 @@ jobs:
           echo "- **Removed URLs:** ${{ env.REMOVED_URLS }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Errors:** ${{ env.ERRORS }}" >> $GITHUB_STEP_SUMMARY
           
-      - name: Upload metrics as artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: crawler-metrics
-          path: |
-            crawler_metrics.json
-            crawler_output.txt
+      # Store metrics directly in the repository instead of using artifacts
+      - name: Save metrics to repository
+        run: |
+          # Create a metrics directory if it doesn't exist
+          mkdir -p metrics/$(date +"%Y-%m-%d")
+          
+          # Copy metrics files to the directory
+          cp crawler_metrics.json metrics/$(date +"%Y-%m-%d")/
+          cp crawler_output.txt metrics/$(date +"%Y-%m-%d")/
 
       - name: Update historical metrics
         run: |
@@ -91,9 +93,10 @@ jobs:
           TODAY=$(date +"%Y-%m-%d")
           echo "$TODAY,${{ env.TOTAL_RUNTIME }},${{ env.TOTAL_URLS }},${{ env.NEW_URLS }},${{ env.UPDATED_URLS }},${{ env.REMOVED_URLS }},${{ env.ERRORS }}" >> metrics_history.csv
           
-      - name: Commit metrics history
+      - name: Commit metrics history and results
         run: |
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions@github.com'
           git add metrics_history.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update metrics history [skip ci]" && git push)
+          git add metrics/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update metrics [skip ci]" && git push)
