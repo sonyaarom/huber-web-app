@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-from .utils import with_progress, convert_to_date, create_id_for_url
+from .utils.crawl_utils import with_progress, convert_to_date, create_id_for_url
 
 # Configure logging
 logging.basicConfig(
@@ -246,6 +246,8 @@ def process_sitemap(url, pattern=None, exclude_extensions=None, exclude_patterns
         logger.error(f"Error in process_sitemap: {e}", exc_info=True)
         raise
 
+
+#TODO: remove this
 # @with_progress
 # def main():
 #     """
