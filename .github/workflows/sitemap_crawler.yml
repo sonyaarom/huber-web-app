@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11.11'
+          python-version: '3.9'
           
       - name: Install dependencies
         run: |
@@ -28,6 +28,7 @@ jobs:
           pip install psycopg2-binary requests beautifulsoup4
           
       - name: Run sitemap crawler
+        id: crawler
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -38,5 +39,61 @@ jobs:
         run: |
           # Set PYTHONPATH to include the project root
           export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
-          # Run the crawler script
-          python -m hubert.data_ingestion.huber_crawler.main
+          # Run the crawler script and capture start time
+          echo "::group::Crawler Log Output"
+          START_TIME=$(date +%s)
+          python -m hubert.data_ingestion.huber_crawler.main | tee crawler_output.txt
+          END_TIME=$(date +%s)
+          echo "::endgroup::"
+          
+          # Extract metrics from the output for GitHub Actions summary
+          if [ -f "crawler_metrics.json" ]; then
+            echo "TOTAL_RUNTIME=$(jq '.total_runtime_seconds' crawler_metrics.json)" >> $GITHUB_ENV
+            echo "TOTAL_URLS=$(jq '.total_urls_found' crawler_metrics.json)" >> $GITHUB_ENV
+            echo "NEW_URLS=$(jq '.new_urls' crawler_metrics.json)" >> $GITHUB_ENV
+            echo "UPDATED_URLS=$(jq '.updated_urls' crawler_metrics.json)" >> $GITHUB_ENV
+            echo "REMOVED_URLS=$(jq '.removed_urls' crawler_metrics.json)" >> $GITHUB_ENV
+            echo "ERRORS=$(jq '.errors' crawler_metrics.json)" >> $GITHUB_ENV
+          else
+            echo "TOTAL_RUNTIME=$((END_TIME - START_TIME))" >> $GITHUB_ENV
+            echo "No metrics file found. Using fallback timing."
+          fi
+
+      - name: Create job summary
+        run: |
+          echo "## Sitemap Crawler Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Run completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total runtime:** ${{ env.TOTAL_RUNTIME }} seconds" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total URLs found:** ${{ env.TOTAL_URLS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New URLs:** ${{ env.NEW_URLS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Updated URLs:** ${{ env.UPDATED_URLS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Removed URLs:** ${{ env.REMOVED_URLS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Errors:** ${{ env.ERRORS }}" >> $GITHUB_STEP_SUMMARY
+          
+      - name: Upload metrics as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: crawler-metrics
+          path: |
+            crawler_metrics.json
+            crawler_output.txt
+
+      - name: Update historical metrics
+        run: |
+          # Create historical metrics file if it doesn't exist
+          if [ ! -f "metrics_history.csv" ]; then
+            echo "date,total_runtime,total_urls,new_urls,updated_urls,removed_urls,errors" > metrics_history.csv
+          fi
+          
+          # Append today's metrics
+          TODAY=$(date +"%Y-%m-%d")
+          echo "$TODAY,${{ env.TOTAL_RUNTIME }},${{ env.TOTAL_URLS }},${{ env.NEW_URLS }},${{ env.UPDATED_URLS }},${{ env.REMOVED_URLS }},${{ env.ERRORS }}" >> metrics_history.csv
+          
+      - name: Commit metrics history
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add metrics_history.csv
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update metrics history [skip ci]" && git push)
