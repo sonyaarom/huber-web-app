@@ -6,7 +6,8 @@ from typing import Optional, List
 
 # Get the absolute path to the .env file
 current_dir = Path(__file__).parent
-env_file_path = 'data-engineering-huber/.venv'
+# Look for .env in the project root directory
+env_file_path = current_dir.parent.parent / '.venv'
 
 class Settings(BaseSettings):
     url: Optional[str] = Field('https://www.wiwi.hu-berlin.de/sitemap.xml.gz')
@@ -16,18 +17,19 @@ class Settings(BaseSettings):
     include_patterns: Optional[List[str]] = Field(['/en/'])
     allowed_base_url: Optional[str] = Field('https://www.wiwi.hu-berlin.de')
 
-    db_host: str = Field(env='DB_HOST')
-    db_port: int = Field(env='DB_PORT')
-    db_name: str = Field(env='DB_NAME')
-    db_username: str = Field(env='DB_USERNAME')
-    db_password: str = Field(env='DB_PASSWORD')
-    openai_api_key: str = Field(env='OPENAI_API_KEY')
+    # Restore environment variable mappings
+    db_host: str = Field(default="localhost", env='DB_HOST')
+    db_port: int = Field(default=5432, env='DB_PORT')
+    db_name: str = Field(default="huber_db", env='DB_NAME')
+    db_username: str = Field(default="postgres", env='DB_USERNAME')
+    db_password: str = Field(default="password", env='DB_PASSWORD')
+    openai_api_key: str = Field(default="your-api-key", env='OPENAI_API_KEY')
 
     class Config:
         env_file = str(env_file_path)
         env_file_encoding = 'utf-8'
         extra = 'ignore'
-        case_sensitive = False  # Make environment variable names case-insensitive
+        case_sensitive = False
 
 # Print debug information
 print(f"Looking for .env file at: {env_file_path}")

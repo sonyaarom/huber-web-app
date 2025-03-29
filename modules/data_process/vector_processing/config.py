@@ -6,7 +6,7 @@ from typing import Optional, List
 
 # Get the absolute path to the .env file
 current_dir = Path(__file__).parent
-env_file_path = 'data-engineering-huber/.venv'
+env_file_path = current_dir.parent.parent.parent / '.venv'
 
 class Settings(BaseSettings):
     url: Optional[str] = Field('https://www.wiwi.hu-berlin.de/sitemap.xml.gz')
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(env='OPENAI_API_KEY')
 
     class Config:
-        env_file = str(env_file_path)
+        env_file = env_file_path
         env_file_encoding = 'utf-8'
         extra = 'ignore'
         case_sensitive = False  # Make environment variable names case-insensitive

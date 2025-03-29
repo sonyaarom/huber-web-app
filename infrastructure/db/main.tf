@@ -8,8 +8,8 @@ terraform {
 }
 
 provider "postgresql" {
-  host            = "localhost"  
-  port            = 5433         
+  host            = "aws-0-eu-central-1.pooler.supabase.com"  
+  port            = 5432         
   database        = var.db_name
   username        = var.db_username
   password        = var.db_password
@@ -93,7 +93,8 @@ resource "null_resource" "create_page_keywords_table" {
     psql --host=${var.db_host} --port=${var.db_port} --username=${var.db_username} --dbname=${var.db_name} --command "
     CREATE TABLE IF NOT EXISTS public.page_keywords (
         id TEXT PRIMARY KEY,
-        score FLOAT,
+        url TEXT NOT NULL,
+        last_modified TIMESTAMP NOT NULL,
         tokenized_text TSVECTOR,
         raw_text TEXT
     );"
@@ -114,10 +115,9 @@ resource "null_resource" "create_page_embeddings_table" {
     CREATE TABLE IF NOT EXISTS public.page_embeddings (
         id TEXT NOT NULL,
         split_id TEXT NOT NULL,
-        split_type TEXT,
-        embedding_model TEXT,
+        url TEXT,
+        chunk_text TEXT,
         embedding_vector VECTOR(1536),
-        raw_text TEXT,
         PRIMARY KEY (id, split_id)  
     );
 

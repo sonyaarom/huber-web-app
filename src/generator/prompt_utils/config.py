@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     CONTEXT_LENGTH: Optional[int] = Field(env='CONTEXT_LENGTH', default=4096)
     SEPARATOR: Optional[str] = Field(env='SEPARATOR', default="\n\n")
     EMBEDDING_PROVIDER: Optional[str] = Field(env='EMBEDDING_PROVIDER', default="openai")
-    
+    TOGETHER_API_KEY: Optional[str] = Field(env='TOGETHER_API_KEY', default=None)
     # Langfuse prompt IDs configuration
     langfuse_prompt_ids: Dict[str, str] = {
         "main-task-v2": "main-task-v2",

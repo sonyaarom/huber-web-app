@@ -9,6 +9,8 @@ from sqlalchemy.dialects.postgresql import insert
 from config import settings
 from sitemap_utils import process_sitemap
 
+
+#TODO: clean up the code
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

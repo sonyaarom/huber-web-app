@@ -18,6 +18,10 @@ def lemmatize_text(text):
     lemmatized_no_stops = [token.lemma_ for token in doc if not token.is_stop]
     # Remove punctuation tokens
     lemmatized_no_stops = [token for token in lemmatized_no_stops if token not in string.punctuation]
+    # Remove numbers
+    lemmatized_no_stops = [token for token in lemmatized_no_stops if not token.isdigit()]
+    # Remove any special signs like @, #, $, %, etc.
+    lemmatized_no_stops = [token for token in lemmatized_no_stops if not any(char in token for char in '@#$%&*()_+-=[]{}|;:,.<>?/')]
     return ' '.join(lemmatized_no_stops)
 
 def process_text(text):
@@ -77,4 +81,4 @@ if __name__ == "__main__":
             }
             connection.execute(upsert_query, params)
     
-    print("Upsert completed for the first 5 rows into page_keywords.")
+

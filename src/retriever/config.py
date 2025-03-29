@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     
     # Reranker settings
     use_reranker: bool = Field(env='USE_RERANKER', default=True)
+    together_api_key: str = Field(env='TOGETHER_API_KEY')
     reranker_model: str = Field(env='RERANKER_MODEL', default='cross-encoder/ms-marco-MiniLM-L-6-v2')
     
     # Hybrid search settings

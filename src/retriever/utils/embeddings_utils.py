@@ -53,7 +53,7 @@ class EmbeddingGenerator:
             
             # Default model if none specified
             if model_name is None:
-                self.model_name = "text-embedding-3-large"
+                self.model_name = "text-embedding-3-small"
             
             # Set API key
             client_params = {}

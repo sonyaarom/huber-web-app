@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: data-engineering-huber
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 run_ui:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0

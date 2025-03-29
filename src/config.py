@@ -16,12 +16,13 @@ class BaseSettings(BaseSettings):
     # Common settings
     top_k: int = Field(env='TOP_K', default=10)
     threshold: Optional[float] = Field(env='THRESHOLD', default=0.5)
+    together_api_key: str = Field(env='TOGETHER_API_KEY')   
     
     # Optional fields used by some modules
     qa_pairs_path: Optional[str] = Field(env='QA_PAIRS_PATH', default=None)
     wandb_entity: Optional[str] = Field(env='WANDB_ENTITY', default=None)
     
     class Config:
-        env_file = '.env'  # Note: Changed from .venv to .env which is more standard
+        env_file = '.venv'  # Note: Changed from .venv to .env which is more standard
         extra = 'ignore'
         case_sensitive = False 

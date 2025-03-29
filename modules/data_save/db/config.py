@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     db_password: Optional[str] 
 
     class Config:
-        env_file = '.env'
+        env_file = '/Users/s.konchakova/data-engineering-huber/.venv'
         extra = 'ignore'
         
 settings = Settings()

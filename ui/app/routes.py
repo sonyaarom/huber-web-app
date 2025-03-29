@@ -1,6 +1,7 @@
 from flask import render_template, request, jsonify
 from ui.app import app
 from src.generator.generator_utils.generator_utils import initialize_models, generate_answer
+from src.generator.main import together_generator
 from src.generator.prompt_utils.prompt_templates import PromptFactory
 from src.generator.prompt_utils.config import settings
 import logging
@@ -40,23 +41,51 @@ def ask():
         prompt_text = prompt_factory.build_prompt(user_question=question, context=context)
         
         # Generate the answer
-        response = generate_answer(
-            llm=llm,
-            generation_type='openai',
-            prompt_text=prompt_text,
-            max_tokens=256,
-            temperature=0.1
-        )
-        
+        response = together_generator(question, context)
         # Extract the answer text
-        answer = response['choices'][0]['text']
         
         return jsonify({
             'question': question,
             'context': context,
-            'answer': answer
+            'answer': response
         })
     
     except Exception as e:
         logger.error(f"Error generating answer: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/chat')
+def chat():
+    return render_template('chat.html')
+
+@app.route('/search')
+def search():
+    return render_template('search.html')
+
+@app.route('/retrieve_urls', methods=['POST'])
+def retrieve_urls():
+    question = request.form.get('question', '')
+    
+    if not question:
+        return jsonify({'error': 'Question is required'}), 400
+    
+    try:
+        # This is a placeholder implementation
+        # In a real implementation, you would use your embedding_generator and reranker_model
+        # to find relevant URLs based on the question
+        
+        # Mock response with sample URLs for demonstration
+        sample_urls = [
+            "https://www.hu-berlin.de/en/studies/counselling/course-catalogue",
+            "https://www.hu-berlin.de/en/studies/admission/application",
+            "https://www.hu-berlin.de/en/research/services/resources"
+        ]
+        
+        return jsonify({
+            'question': question,
+            'urls': sample_urls
+        })
+    
+    except Exception as e:
+        logger.error(f"Error retrieving URLs: {e}")
         return jsonify({'error': str(e)}), 500
