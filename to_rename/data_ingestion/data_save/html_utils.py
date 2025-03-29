@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
 import logging
-import re
 from datetime import datetime
 from typing import Optional, Dict
 

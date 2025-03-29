@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, MetaData, func
 from sqlalchemy.dialects.postgresql import insert
 from config import settings
-from sitemap_utils import process_sitemap
+from to_rename.data_ingestion.data_save.sitemap_etl import process_sitemap
 
 
 #TODO: clean up the code
