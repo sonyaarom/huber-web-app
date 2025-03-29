@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
 import logging
-import re
 from datetime import datetime
 from typing import Optional, Dict
 
@@ -9,7 +7,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, MetaData, select, insert, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
-from config import settings
+from ..config import settings
 
 # Configure logging
 logging.basicConfig(
@@ -115,73 +113,73 @@ def upsert_page_content(conn, page_content, record_id, url, html, extracted, now
     
     conn.execute(upsert_stmt)
 
-def main():
-    """
-    Main function to scrape and store web page content.
-    Includes improved error handling and logging.
-    """
-    try:
-        # Construct database URL more securely
-        db_url = (
-            f"postgresql://{settings.db_username}:{settings.db_password}"
-            f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
-        )
-        engine = create_engine(db_url)
-        metadata = MetaData()
-        metadata.reflect(bind=engine)
+# def main():
+#     """
+#     Main function to scrape and store web page content.
+#     Includes improved error handling and logging.
+#     """
+#     try:
+#         # Construct database URL more securely
+#         db_url = (
+#             f"postgresql://{settings.db_username}:{settings.db_password}"
+#             f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+#         )
+#         engine = create_engine(db_url)
+#         metadata = MetaData()
+#         metadata.reflect(bind=engine)
 
-        # Validate required tables exist
-        required_tables = ['page_raw', 'page_content']
-        for table_name in required_tables:
-            if table_name not in metadata.tables:
-                logger.error(f"{table_name} table not found! Ensure it's defined in Terraform.")
-                return
+#         # Validate required tables exist
+#         required_tables = ['page_raw', 'page_content']
+#         for table_name in required_tables:
+#             if table_name not in metadata.tables:
+#                 logger.error(f"{table_name} table not found! Ensure it's defined in Terraform.")
+#                 return
 
-        page_raw = metadata.tables['page_raw']
-        page_content = metadata.tables['page_content']
+#         page_raw = metadata.tables['page_raw']
+#         page_content = metadata.tables['page_content']
 
-        # Fetch records with more robust error handling
-        with engine.connect() as conn:
-            try:
-                stmt = select(page_raw)
-                result = conn.execute(stmt)
-                records = result.fetchall()
-            except SQLAlchemyError as e:
-                logger.error(f"Database query error: {e}")
-                return
+#         # Fetch records with more robust error handling
+#         with engine.connect() as conn:
+#             try:
+#                 stmt = select(page_raw)
+#                 result = conn.execute(stmt)
+#                 records = result.fetchall()
+#             except SQLAlchemyError as e:
+#                 logger.error(f"Database query error: {e}")
+#                 return
 
-        logger.info(f"Fetched {len(records)} rows from page_raw.")
+#         logger.info(f"Fetched {len(records)} rows from page_raw.")
 
-        # Process each record
-        for record in records:
-            # More flexible record access
-            record_id = record['id'] if isinstance(record, dict) else record[0]
-            url = record['url'] if isinstance(record, dict) else record[1]
+#         # Process each record
+#         for record in records:
+#             # More flexible record access
+#             record_id = record['id'] if isinstance(record, dict) else record[0]
+#             url = record['url'] if isinstance(record, dict) else record[1]
             
-            logger.info(f"Processing URL: {url}")
+#             logger.info(f"Processing URL: {url}")
             
-            try:
-                html = get_html_content(url)
-                if html is None:
-                    logger.warning(f"Skipping URL due to fetch failure: {url}")
-                    continue
+#             try:
+#                 html = get_html_content(url)
+#                 if html is None:
+#                     logger.warning(f"Skipping URL due to fetch failure: {url}")
+#                     continue
                 
-                extracted = extract_info(html)
+#                 extracted = extract_info(html)
                 
-                now = datetime.utcnow()
+#                 now = datetime.utcnow()
                 
-                # Transactional insert with conflict handling
-                with engine.begin() as conn:
-                    upsert_page_content(conn, page_content, record_id, url, html, extracted, now)
+#                 # Transactional insert with conflict handling
+#                 with engine.begin() as conn:
+#                     upsert_page_content(conn, page_content, record_id, url, html, extracted, now)
                 
-                logger.info(f"Inserted/updated content for URL: {url}")
+#                 logger.info(f"Inserted/updated content for URL: {url}")
             
-            except Exception as e:
-                logger.error(f"Error processing record {record_id} with URL {url}: {e}", exc_info=True)
-                # Continue with next record to prevent total script failure
+#             except Exception as e:
+#                 logger.error(f"Error processing record {record_id} with URL {url}: {e}", exc_info=True)
+#                 # Continue with next record to prevent total script failure
 
-    except Exception as e:
-        logger.critical(f"Unhandled error in main function: {e}", exc_info=True)
+#     except Exception as e:
+#         logger.critical(f"Unhandled error in main function: {e}", exc_info=True)
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

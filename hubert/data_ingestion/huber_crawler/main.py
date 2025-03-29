@@ -6,8 +6,8 @@ from datetime import datetime
 
 from sqlalchemy import create_engine, MetaData, func
 from sqlalchemy.dialects.postgresql import insert
-from config import settings
-from sitemap_utils import process_sitemap
+from ..config import settings
+from .sitemap import process_sitemap
 
 
 #TODO: clean up the code
@@ -27,7 +27,7 @@ def insert_page_raw_records(records):
         f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
     )
 
-    # ✅ Add timeout to prevent long-running connections
+    #  Add timeout to prevent long-running connections
     engine = create_engine(db_url, connect_args={"connect_timeout": 10})
 
     metadata = MetaData()
@@ -63,12 +63,12 @@ def insert_page_raw_records(records):
                 conn.execute(stmt)
                 end_query = time.time()
 
-                logger.info(f"✅ Record {record_id} updated in {end_query - start_query:.4f} sec")
+                logger.info(f"Record {record_id} updated in {end_query - start_query:.4f} sec")
 
             except Exception as e:
-                logger.error(f"❌ Error updating record {record_id}: {e}")
+                logger.error(f"Error updating record {record_id}: {e}")
 
-        # ✅ Mark missing pages as inactive
+        # Mark missing pages as inactive
         try:
             start_query = time.time()
             stmt_mark_inactive = page_raw.update().where(
@@ -78,12 +78,12 @@ def insert_page_raw_records(records):
             conn.execute(stmt_mark_inactive)
             end_query = time.time()
 
-            logger.info(f"✅ Marked missing pages as inactive in {end_query - start_query:.4f} sec")
+            logger.info(f"Marked missing pages as inactive in {end_query - start_query:.4f} sec")
 
         except Exception as e:
-            logger.error(f"❌ Error marking missing pages inactive: {e}")
+            logger.error(f"Error marking missing pages inactive: {e}")
 
-    logger.info(f"🎯 Database update completed in {time.time() - start_time:.2f} sec")
+    logger.info(f"Database update completed in {time.time() - start_time:.2f} sec")
 
 
 def main():
@@ -104,17 +104,17 @@ def main():
             settings.allowed_base_url
         )
 
-        logger.info(f"✅ Sitemap processed in {time.time() - start_time:.2f} sec, {len(records)} records found.")
+        logger.info(f"Sitemap processed in {time.time() - start_time:.2f} sec, {len(records)} records found.")
 
     except Exception as e:
-        logger.error(f"❌ Error processing sitemap: {e}")
+        logger.error(f"Error processing sitemap: {e}")
         return
 
     if not records:
         logger.info("⚠ No records to insert.")
         return
 
-    # ✅ Insert or update records in the database
+    #  Insert or update records in the database
     insert_page_raw_records(records)
 
 if __name__ == "__main__":
