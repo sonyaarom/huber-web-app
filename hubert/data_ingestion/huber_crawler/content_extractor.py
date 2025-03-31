@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, MetaData, select, insert, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from ..config import settings
+from sqlalchemy import text
 
 # Configure logging
 logging.basicConfig(
@@ -78,7 +79,7 @@ def extract_info(html_content: str) -> Dict[str, str]:
     return {"title": title_text, "content": f"{title_text} {content_text}"}
 
 
-def upsert_page_content(conn, page_content, record_id, url, html, extracted, now):
+def upsert_page_content(conn, page_content, record_id, url, html, extracted, now, last_updated):
     """
     Perform an upsert operation for page content using PostgreSQL-specific insert.
     
@@ -90,6 +91,7 @@ def upsert_page_content(conn, page_content, record_id, url, html, extracted, now
         html: HTML content
         extracted: Extracted information dictionary
         now: Current timestamp
+        last_updated: Last updated timestamp from page_raw
     """
     insert_stmt = pg_insert(page_content).values(
         id=record_id,
@@ -97,7 +99,9 @@ def upsert_page_content(conn, page_content, record_id, url, html, extracted, now
         html_content=html,
         extracted_title=extracted['title'],
         extracted_content=extracted['content'],
-        fetched_at=now
+        last_updated=last_updated,
+        is_active=True,
+        last_scraped=now  # Add this line to set last_scraped to the current time
     )
     
     upsert_stmt = insert_stmt.on_conflict_do_update(
@@ -107,79 +111,80 @@ def upsert_page_content(conn, page_content, record_id, url, html, extracted, now
             'html_content': insert_stmt.excluded.html_content,
             'extracted_title': insert_stmt.excluded.extracted_title,
             'extracted_content': insert_stmt.excluded.extracted_content,
-            'fetched_at': insert_stmt.excluded.fetched_at
+            'last_updated': insert_stmt.excluded.last_updated,
+            'is_active': True,
+            'last_scraped': now  # Add this line to update last_scraped on conflict
         }
     )
     
     conn.execute(upsert_stmt)
 
-# def main():
-#     """
-#     Main function to scrape and store web page content.
-#     Includes improved error handling and logging.
-#     """
-#     try:
-#         # Construct database URL more securely
-#         db_url = (
-#             f"postgresql://{settings.db_username}:{settings.db_password}"
-#             f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
-#         )
-#         engine = create_engine(db_url)
-#         metadata = MetaData()
-#         metadata.reflect(bind=engine)
+def content_extractor():
+    """
+    Main function to scrape and store web page content.
+    Uses raw SQL for better compatibility across SQLAlchemy versions.
+    """
+    try:
+        # Construct database URL more securely
+        db_url = (
+            f"postgresql://{settings.db_username}:{settings.db_password}"
+            f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+        )
+        engine = create_engine(db_url)
+        metadata = MetaData()
+        metadata.reflect(bind=engine)
 
-#         # Validate required tables exist
-#         required_tables = ['page_raw', 'page_content']
-#         for table_name in required_tables:
-#             if table_name not in metadata.tables:
-#                 logger.error(f"{table_name} table not found! Ensure it's defined in Terraform.")
-#                 return
+        # Validate required tables exist
+        required_tables = ['page_raw', 'page_content']
+        for table_name in required_tables:
+            if table_name not in metadata.tables:
+                logger.error(f"{table_name} table not found!")
+                return
 
-#         page_raw = metadata.tables['page_raw']
-#         page_content = metadata.tables['page_content']
+        page_content = metadata.tables['page_content']
 
-#         # Fetch records with more robust error handling
-#         with engine.connect() as conn:
-#             try:
-#                 stmt = select(page_raw)
-#                 result = conn.execute(stmt)
-#                 records = result.fetchall()
-#             except SQLAlchemyError as e:
-#                 logger.error(f"Database query error: {e}")
-#                 return
+        # Fetch records with raw SQL for better compatibility
+        with engine.connect() as conn:
+            try:
+                # Use raw SQL via text() to avoid SQLAlchemy version issues
+                query = text("SELECT id, url, last_updated, is_active FROM page_raw WHERE is_active = TRUE")
+                result = conn.execute(query)
+                records = result.fetchall()
+            except SQLAlchemyError as e:
+                logger.error(f"Database query error: {e}")
+                return
 
-#         logger.info(f"Fetched {len(records)} rows from page_raw.")
+        logger.info(f"Fetched {len(records)} active rows from page_raw.")
 
-#         # Process each record
-#         for record in records:
-#             # More flexible record access
-#             record_id = record['id'] if isinstance(record, dict) else record[0]
-#             url = record['url'] if isinstance(record, dict) else record[1]
+        # Process each record
+        for record in records:
+            # Extract values using positional access which works in all versions
+            record_id = record[0]
+            url = record[1]
+            last_updated = record[2]
             
-#             logger.info(f"Processing URL: {url}")
+            logger.info(f"Processing URL: {url}")
             
-#             try:
-#                 html = get_html_content(url)
-#                 if html is None:
-#                     logger.warning(f"Skipping URL due to fetch failure: {url}")
-#                     continue
+            try:
+                html = get_html_content(url)
+                if html is None:
+                    logger.warning(f"Skipping URL due to fetch failure: {url}")
+                    continue
                 
-#                 extracted = extract_info(html)
+                extracted = extract_info(html)
                 
-#                 now = datetime.utcnow()
+                now = datetime.utcnow()
                 
-#                 # Transactional insert with conflict handling
-#                 with engine.begin() as conn:
-#                     upsert_page_content(conn, page_content, record_id, url, html, extracted, now)
+                # Transactional insert with conflict handling
+                with engine.begin() as conn:
+                    # Pass last_updated to the upsert function
+                    upsert_page_content(conn, page_content, record_id, url, html, extracted, now, last_updated)
                 
-#                 logger.info(f"Inserted/updated content for URL: {url}")
+                logger.info(f"Inserted/updated content for URL: {url}")
             
-#             except Exception as e:
-#                 logger.error(f"Error processing record {record_id} with URL {url}: {e}", exc_info=True)
-#                 # Continue with next record to prevent total script failure
+            except Exception as e:
+                logger.error(f"Error processing record {record_id} with URL {url}: {e}", exc_info=True)
+                # Continue with next record to prevent total script failure
 
-#     except Exception as e:
-#         logger.critical(f"Unhandled error in main function: {e}", exc_info=True)
-
-# if __name__ == "__main__":
-#     main()
+    except Exception as e:
+        logger.critical(f"Unhandled error in content_extractor function: {e}", exc_info=True)

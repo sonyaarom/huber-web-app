@@ -53,6 +53,7 @@ resource "null_resource" "create_page_raw_table" {
         id TEXT PRIMARY KEY,
         url TEXT NOT NULL,
         last_updated TIMESTAMP NOT NULL,
+        last_scraped TIMESTAMP NOT NULL,
         is_active BOOLEAN DEFAULT TRUE
     );"
     EOT
@@ -75,8 +76,9 @@ resource "null_resource" "create_page_content_table" {
         html_content TEXT,
         extracted_title TEXT,
         extracted_content TEXT,
-        fetched_at TIMESTAMP NOT NULL,
-        is_active BOOLEAN DEFAULT TRUE
+        is_active BOOLEAN DEFAULT TRUE,
+        last_updated TIMESTAMP NOT NULL,
+        last_scraped TIMESTAMP NOT NULL
     );"
     EOT
 
@@ -96,7 +98,8 @@ resource "null_resource" "create_page_keywords_table" {
         url TEXT NOT NULL,
         last_modified TIMESTAMP NOT NULL,
         tokenized_text TSVECTOR,
-        raw_text TEXT
+        raw_text TEXT,
+        last_scraped TIMESTAMP NOT NULL
     );"
     EOT
 
@@ -118,7 +121,8 @@ resource "null_resource" "create_page_embeddings_table" {
         url TEXT,
         chunk_text TEXT,
         embedding_vector VECTOR(1536),
-        PRIMARY KEY (id, split_id)  
+        PRIMARY KEY (id, split_id),
+        last_scraped TIMESTAMP NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_page_embeddings_vector 
