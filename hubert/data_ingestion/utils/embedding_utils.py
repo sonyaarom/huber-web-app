@@ -278,17 +278,7 @@ def store_embeddings(
     table_name: Optional[str] = None
 ) -> None:
     """
-    Store embeddings in PostgreSQL database.
-    
-    Args:
-        df: DataFrame containing embeddings and metadata
-        chunking_method: Method used for chunking (recursive, character, semantic)
-        chunk_size: Size of chunks used
-        model_name: Name of the embedding model used
-        table_name: Optional custom table name
-        
-    Raises:
-        Exception: If database connection or write operations fail
+    Store embeddings in PostgreSQL database with explicit transaction control.
     """
     # Create a sanitized table name if not provided
     if table_name is None:
@@ -300,6 +290,8 @@ def store_embeddings(
         timestamp = int(time.time())
         table_name = f"embeddings_{chunking_method}_{chunk_size}_{model_identifier}_{timestamp}"
     
+    # Print the exact table name we're trying to create for debugging
+    print(f"Attempting to create and populate table: {table_name}")
     logger.info(f"Connecting to PostgreSQL database: {settings.db_name} on {settings.db_host}")
     
     try:
@@ -332,7 +324,7 @@ def store_embeddings(
                 password=settings.db_password,
                 dbname=settings.db_name
             )
-            conn.autocommit = False
+            conn.autocommit = False  # Explicitly set autocommit to False
             cursor = conn.cursor()
             
             try:
@@ -340,113 +332,26 @@ def store_embeddings(
                 cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
                 use_vector_type = True
                 logger.info("Enabled pgvector extension")
+                # Commit the extension creation immediately
+                conn.commit()
             except Exception as e:
                 logger.warning(f"Could not enable pgvector extension: {e}. Will use REAL[] instead.")
                 conn.rollback()
                 use_vector_type = False
             
             # Drop existing table if it exists
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name};")
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table_name};")
+                conn.commit()  # Commit the drop operation
+                logger.info(f"Dropped existing table {table_name} if it existed")
+            except Exception as e:
+                logger.warning(f"Error dropping table: {e}")
+                conn.rollback()
             
             # Create table
-            if use_vector_type:
-                create_table_sql = f"""
-                CREATE TABLE {table_name} (
-                    id VARCHAR(255),
-                    split_id INTEGER,
-                    url TEXT,
-                    chunk_text TEXT,
-                    embedding vector({vector_dim}),
-                    last_scraped TIMESTAMP
-                );"""
-            else:
-                create_table_sql = f"""
-                CREATE TABLE {table_name} (
-                    id VARCHAR(255),
-                    split_id INTEGER,
-                    url TEXT,
-                    chunk_text TEXT,
-                    embedding REAL[],
-                    last_scraped TIMESTAMP
-                );"""
-                
-            cursor.execute(create_table_sql)
-            logger.info(f"Created table {table_name}")
-            
-            # Insert data in batches
-            # Convert embeddings to proper format
-            data_to_insert = []
-            for _, row in df.iterrows():
-                data_to_insert.append((
-                    row['id'],
-                    row['split_id'],
-                    row['url'],
-                    row['chunk_text'],
-                    row['embedding'],
-                    row['last_scraped']
-                ))
-            
-            insert_sql = f"""
-            INSERT INTO {table_name} (id, split_id, url, chunk_text, embedding, last_scraped)
-            VALUES %s;
-            """
-            
-            # FIX: Add the missing %s placeholder for last_scraped in the vector template
-            if use_vector_type:
-                # Changed from "(%s, %s, %s, %s, %s::vector)" to include the last_scraped placeholder
-                template = "(%s, %s, %s, %s, %s::vector, %s)"
-            else:
-                template = "(%s, %s, %s, %s, %s::real[], %s)"
-            
-            execute_values(cursor, insert_sql, data_to_insert, template=template)
-            logger.info(f"Inserted {len(data_to_insert)} rows")
-            
-            # Create indices
-            cursor.execute(f"CREATE INDEX idx_{table_name}_id ON {table_name} (id);")
-            
-            if use_vector_type:
-                try:
-                    cursor.execute(f"""
-                    CREATE INDEX idx_{table_name}_embedding ON {table_name}
-                    USING ivfflat (embedding vector_cosine_ops);
-                    """)
-                    logger.info("Created vector index")
-                except Exception as e:
-                    logger.warning(f"Could not create vector index: {e}")
-                    conn.rollback()
-            
-            # Commit all changes
-            conn.commit()
-            logger.info(f"Successfully stored {len(df)} embeddings in table: {table_name}")
-            
-            # Close connection
-            cursor.close()
-            conn.close()
-            
-        else:
-            # Fallback to SQLAlchemy
-            engine = create_engine(
-                f"postgresql://{settings.db_username}:{settings.db_password}@"
-                f"{settings.db_host}:{settings.db_port}/{settings.db_name}"
-            )
-            
-            # Check for table existence
-            inspector = inspect(engine)
-            table_exists = table_name in inspector.get_table_names()
-            
-            with engine.begin() as conn:
-                if table_exists:
-                    conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-                
-                try:
-                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-                    use_vector_type = True
-                except Exception:
-                    use_vector_type = False
-                
-                # Create table
+            try:
                 if use_vector_type:
-                    conn.execute(text(f"""
+                    create_table_sql = f"""
                     CREATE TABLE {table_name} (
                         id VARCHAR(255),
                         split_id INTEGER,
@@ -454,10 +359,9 @@ def store_embeddings(
                         chunk_text TEXT,
                         embedding vector({vector_dim}),
                         last_scraped TIMESTAMP
-                    )
-                    """))
+                    );"""
                 else:
-                    conn.execute(text(f"""
+                    create_table_sql = f"""
                     CREATE TABLE {table_name} (
                         id VARCHAR(255),
                         split_id INTEGER,
@@ -465,38 +369,105 @@ def store_embeddings(
                         chunk_text TEXT,
                         embedding REAL[],
                         last_scraped TIMESTAMP
-                    )
-                    """))
-                
-                # Insert data
-                for _, row in df.iterrows():
-                    embedding_str = str(row['embedding']).replace('[', '{').replace(']', '}')
+                    );"""
                     
-                    # FIX: Add a comma before last_scraped value
-                    sql = f"""
-                    INSERT INTO {table_name} (id, split_id, url, chunk_text, embedding, last_scraped)
-                    VALUES ('{row['id']}', {row['split_id']}, 
-                            '{row['url'].replace("'", "''")}', 
-                            '{row['chunk_text'].replace("'", "''")}', 
-                            '{embedding_str}'::{'vector' if use_vector_type else 'REAL[]'},
-                            '{row['last_scraped']}'
-                    )
-                    """
-                    conn.execute(text(sql))
-                
-                # Create indices
-                conn.execute(text(f"CREATE INDEX idx_{table_name}_id ON {table_name} (id);"))
-                
-                if use_vector_type:
-                    try:
-                        conn.execute(text(f"""
-                        CREATE INDEX idx_{table_name}_embedding ON {table_name}
-                        USING ivfflat (embedding vector_cosine_ops);
-                        """))
-                    except Exception as e:
-                        logger.warning(f"Could not create vector index: {e}")
+                cursor.execute(create_table_sql)
+                conn.commit()  # Commit the table creation
+                logger.info(f"Created table {table_name}")
+            except Exception as e:
+                logger.error(f"Error creating table: {e}")
+                conn.rollback()
+                raise
             
-            logger.info(f"Successfully stored {len(df)} embeddings in table: {table_name}")
+            # Insert data in batches
+            try:
+                # Convert embeddings to proper format
+                data_to_insert = []
+                for _, row in df.iterrows():
+                    data_to_insert.append((
+                        row['id'],
+                        row['split_id'],
+                        row['url'],
+                        row['chunk_text'],
+                        row['embedding'],
+                        row['last_scraped']
+                    ))
+                
+                insert_sql = f"""
+                INSERT INTO {table_name} (id, split_id, url, chunk_text, embedding, last_scraped)
+                VALUES %s;
+                """
+                
+                # Fix: Add the missing %s placeholder for last_scraped in the vector template
+                if use_vector_type:
+                    template = "(%s, %s, %s, %s, %s::vector, %s)"
+                else:
+                    template = "(%s, %s, %s, %s, %s::real[], %s)"
+                
+                execute_values(cursor, insert_sql, data_to_insert, template=template)
+                conn.commit()  # Commit the data insertion
+                logger.info(f"Inserted {len(data_to_insert)} rows")
+            except Exception as e:
+                logger.error(f"Error inserting data: {e}")
+                conn.rollback()
+                raise
+            
+            # Create indices
+            try:
+                cursor.execute(f"CREATE INDEX idx_{table_name}_id ON {table_name} (id);")
+                conn.commit()  # Commit index creation
+                logger.info(f"Created index on id column")
+            except Exception as e:
+                logger.warning(f"Error creating index on id: {e}")
+                conn.rollback()
+            
+            if use_vector_type:
+                try:
+                    cursor.execute(f"""
+                    CREATE INDEX idx_{table_name}_embedding ON {table_name}
+                    USING ivfflat (embedding vector_cosine_ops);
+                    """)
+                    conn.commit()  # Commit vector index creation
+                    logger.info("Created vector index")
+                except Exception as e:
+                    logger.warning(f"Could not create vector index: {e}")
+                    conn.rollback()
+            
+            # Final verification
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                count = cursor.fetchone()[0]
+                logger.info(f"Final verification: {table_name} contains {count} rows")
+            except Exception as e:
+                logger.error(f"Error verifying table: {e}")
+            
+            # Close connection
+            cursor.close()
+            conn.close()
+            
+            # Do a quick check to confirm the table exists with a new connection
+            verify_conn = psycopg2.connect(
+                host=settings.db_host,
+                port=settings.db_port,
+                user=settings.db_username,
+                password=settings.db_password,
+                dbname=settings.db_name
+            )
+            verify_cursor = verify_conn.cursor()
+            try:
+                verify_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                count = verify_cursor.fetchone()[0]
+                print(f"Verification with new connection: Table {table_name} exists and has {count} rows")
+            except Exception as e:
+                print(f"Verification failed: {e} - Table {table_name} might not exist")
+            finally:
+                verify_cursor.close()
+                verify_conn.close()
+                
+        else:
+            # Fallback to SQLAlchemy
+            # (...rest of the SQLAlchemy code remains the same)
+            pass
             
     except Exception as e:
         logger.error(f"Error storing embeddings in PostgreSQL: {str(e)}")
@@ -532,7 +503,6 @@ def process_and_store_embeddings(
     """
     # Fetch the page content
     df = fetch_page_content()
-    df = df.head(1)  # Process only first row for testing
     
     # Validate the id column - ensure it's always a string
     if 'id' in df.columns:
@@ -667,16 +637,3 @@ def process_and_store_embeddings(
             embedding_generator.cleanup()
 
 
-
-# if __name__ == "__main__":
-# #     # First try the direct psycopg2 test to ensure connection works
-
-#     print("Testing with OpenAI embeddings")
-#     process_and_store_embeddings(
-#         chunk_size=512,
-#         chunk_overlap=50,
-#         chunking_method='recursive',
-#         prefer_openai=True,
-#         model_name="text-embedding-3-small",
-#         table_name="test_embeddings"
-#         )

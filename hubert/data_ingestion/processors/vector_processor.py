@@ -15,7 +15,7 @@ if hasattr(settings, 'openai_api_key') and settings.openai_api_key:
 def main():
     embeddings = ['text-embedding-3-small']
     # Define a list of chunk sizes to loop through
-    chunk_sizes = [512, 256]
+    chunk_sizes = [512]
     # Include semantic in the list of chunking methods along with others
     chunking_methods = ['recursive']
     
