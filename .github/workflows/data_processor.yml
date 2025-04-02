@@ -1,0 +1,270 @@
+name: Data Processor
+
+on:
+  # Run after sitemap crawler is completed
+  workflow_run:
+    workflows: ["Sitemap Crawler"]
+    types:
+      - completed
+  # Allow manual triggering
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-process:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Ensure additional dependencies needed for processing are installed
+          pip install spacy
+          python -m spacy download en_core_web_sm
+          
+      - name: Check for new or updated data
+        id: data_check
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # Set PYTHONPATH to include the project root
+          export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
+          
+          # Create a check script
+          cat > check_data.py << 'EOF'
+          import psycopg2
+          import os
+          import json
+          from datetime import datetime, timedelta
+
+          # Database connection parameters
+          db_config = {
+              "dbname": os.environ["DB_NAME"],
+              "user": os.environ["DB_USERNAME"],
+              "password": os.environ["DB_PASSWORD"],
+              "host": os.environ["DB_HOST"],
+              "port": os.environ["DB_PORT"]
+          }
+
+          def check_for_new_data(hours_back=24):
+              """Check if there are new or updated records in the last hours_back hours"""
+              try:
+                  # Connect to the database
+                  with psycopg2.connect(**db_config) as conn:
+                      with conn.cursor() as cursor:
+                          # Get timestamp for comparison
+                          time_threshold = datetime.now() - timedelta(hours=hours_back)
+                          
+                          # Check for new or updated records in page_raw
+                          cursor.execute("""
+                              SELECT COUNT(*) FROM page_raw 
+                              WHERE last_scraped > %s AND is_active = TRUE
+                          """, (time_threshold,))
+                          raw_count = cursor.fetchone()[0]
+                          
+                          # Check for new or updated records in page_content that are not in page_keywords
+                          cursor.execute("""
+                              SELECT COUNT(*) FROM page_content pc
+                              LEFT JOIN page_keywords pk ON pc.id = pk.id
+                              WHERE pc.last_scraped > %s 
+                              AND pc.is_active = TRUE 
+                              AND (pk.id IS NULL OR pc.last_updated > pk.last_modified)
+                          """, (time_threshold,))
+                          keywords_needed = cursor.fetchone()[0]
+                          
+                          # Check for new or updated records in page_content that are not in page_embeddings_a
+                          cursor.execute("""
+                              SELECT COUNT(*) FROM page_content pc
+                              LEFT JOIN (
+                                  SELECT DISTINCT id FROM page_embeddings_a
+                              ) pe ON pc.id = pe.id
+                              WHERE pc.last_scraped > %s 
+                              AND pc.is_active = TRUE 
+                              AND (pe.id IS NULL)
+                          """, (time_threshold,))
+                          embeddings_needed = cursor.fetchone()[0]
+                          
+                          # Return results
+                          return {
+                              "new_or_updated_raw": raw_count,
+                              "keywords_needed": keywords_needed,
+                              "embeddings_needed": embeddings_needed,
+                              "processing_needed": keywords_needed > 0 or embeddings_needed > 0
+                          }
+              except Exception as e:
+                  print(f"Error checking for new data: {e}")
+                  # Default to processing needed in case of error
+                  return {
+                      "error": str(e),
+                      "processing_needed": True
+                  }
+
+          # Run the check function and output results
+          results = check_for_new_data()
+          print(f"Check results: {results}")
+
+          # Set GitHub output variable
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"processing_needed={str(results['processing_needed']).lower()}\n")
+              f.write(f"keywords_needed={results.get('keywords_needed', 0)}\n")
+              f.write(f"embeddings_needed={results.get('embeddings_needed', 0)}\n")
+
+          # Save results to a JSON file
+          with open('data_check_results.json', 'w') as f:
+              json.dump(results, f, indent=2)
+          EOF
+          
+          # Run the check script
+          python check_data.py
+      
+      - name: Process keywords
+        if: steps.data_check.outputs.processing_needed == 'true'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
+          echo "::group::Keywords Processing Log"
+          python -m hubert.data_ingestion.processors.keyword_processor
+          echo "::endgroup::"
+      
+      - name: Process embeddings
+        if: steps.data_check.outputs.processing_needed == 'true'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
+          
+          # Modify vector_processor.py to focus on specific tables
+          cat > embedding_processor.py << 'EOF'
+          from hubert.data_ingestion.utils.embedding_utils import process_and_store_embeddings
+          from hubert.data_ingestion.config import settings
+          import logging
+          import os
+
+          # Logger setup
+          logger = logging.getLogger(__name__)
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+          # Set OpenAI API key as environment variable if available
+          if hasattr(settings, 'openai_api_key') and settings.openai_api_key:
+              os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+              logger.info("Set OPENAI_API_KEY environment variable")
+
+          def main():
+              # Process with text-embedding-3-small model
+              embedding_model = 'text-embedding-3-small'
+              chunking_method = 'recursive'
+              chunk_size = 512
+              
+              # Get API key from settings or environment
+              api_key = getattr(settings, 'openai_api_key', os.environ.get("OPENAI_API_KEY"))
+              if not api_key:
+                  logger.error("No OpenAI API key found. Cannot generate embeddings.")
+                  return
+              
+              logger.info(f"Processing with embedding model: {embedding_model}")
+              logger.info(f"Using {chunking_method} chunking with size {chunk_size}")
+              
+              try:
+                  process_and_store_embeddings(
+                      chunk_size=chunk_size,
+                      chunk_overlap=50,
+                      batch_size=1,
+                      chunking_method=chunking_method,
+                      model_name=embedding_model,
+                      api_key=api_key,
+                      prefer_openai=True,
+                      table_name="page_embeddings_a"  # Specify the target table
+                  )
+              except Exception as e:
+                  logger.error(f"Error processing embeddings: {e}")
+                  return False
+              
+              return True
+
+          if __name__ == "__main__":
+              success = main()
+              if not success:
+                  import sys
+                  sys.exit(1)
+          EOF
+          
+          echo "::group::Embeddings Processing Log"
+          python embedding_processor.py
+          echo "::endgroup::"
+
+      - name: Create job summary
+        run: |
+          echo "## Data Processing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Run completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "data_check_results.json" ]; then
+            KEYWORDS_NEEDED=$(cat data_check_results.json | jq -r '.keywords_needed // 0')
+            EMBEDDINGS_NEEDED=$(cat data_check_results.json | jq -r '.embeddings_needed // 0')
+            
+            echo "### Data Check Results" >> $GITHUB_STEP_SUMMARY
+            echo "- **Records needing keyword processing:** $KEYWORDS_NEEDED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Records needing embeddings processing:** $EMBEDDINGS_NEEDED" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ steps.data_check.outputs.processing_needed }}" == "true" ]; then
+              echo "- **Processing status:** Completed" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- **Processing status:** Skipped (no new data)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### Data Check Results" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** Error running data check" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: Save results to repository
+        if: steps.data_check.outputs.processing_needed == 'true'
+        run: |
+          # Create a processors directory in the metrics folder for today
+          mkdir -p metrics/$(date +"%Y-%m-%d")/processors
+          
+          # Create a summary file with the extracted metrics
+          echo "{
+            \"date\": \"$(date +"%Y-%m-%d")\",
+            \"keywords_processed\": \"${{ steps.data_check.outputs.keywords_needed }}\",
+            \"embeddings_processed\": \"${{ steps.data_check.outputs.embeddings_needed }}\",
+            \"status\": \"completed\"
+          }" > metrics/$(date +"%Y-%m-%d")/processors/summary.json
+          
+          # Copy data check results if they exist
+          if [ -f "data_check_results.json" ]; then
+            cp data_check_results.json metrics/$(date +"%Y-%m-%d")/processors/
+          fi
+
+      - name: Commit results
+        if: steps.data_check.outputs.processing_needed == 'true'
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add metrics/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update processor metrics [skip ci]" && git push)
