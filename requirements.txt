@@ -21,7 +21,6 @@ requests>=2.31.0
 spacy>=3.7.2
 SQLAlchemy==2.0.40
 tenacity>=8.2.3
-thinc>=8.2.1
 tiktoken>=0.5.1
 tokenizers>=0.14.0
 torch>=2.1.0
