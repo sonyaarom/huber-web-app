@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
           
       - name: Install dependencies
         run: |
@@ -32,6 +32,15 @@ jobs:
           # Ensure additional dependencies needed for processing are installed
           pip install spacy
           python -m spacy download en_core_web_sm
+
+      # Add to your workflow files:
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
           
       - name: Check for new or updated data
         id: data_check
