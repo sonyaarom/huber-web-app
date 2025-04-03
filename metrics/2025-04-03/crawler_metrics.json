@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-04-03T03:18:22.330233",
-  "total_runtime_seconds": 128.93842911720276,
-  "sitemap_processing_time_seconds": 8.004190683364868,
-  "database_update_time_seconds": 120.93354749679565,
+  "timestamp": "2025-04-03T19:38:58.209050",
+  "total_runtime_seconds": 142.3089370727539,
+  "sitemap_processing_time_seconds": 7.31076979637146,
+  "database_update_time_seconds": 134.99757719039917,
   "total_urls_found": 1023,
-  "new_urls": 0,
-  "updated_urls": 0,
-  "removed_urls": 1,
-  "unchanged_urls": 1023,
+  "new_urls": 1,
+  "updated_urls": 5,
+  "removed_urls": 2,
+  "unchanged_urls": 1017,
   "errors": 0
 }

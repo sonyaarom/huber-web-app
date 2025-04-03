@@ -7,11 +7,11 @@ DB Port: 5432
 ==================================================
 CRAWLER METRICS SUMMARY
 ==================================================
-Total runtime: 1714.77 seconds
+Total runtime: 1854.71 seconds
 Total URLs found: 1023
-New URLs: 0
-Updated URLs: 0
-Removed URLs: 1
-Unchanged URLs: 1023
+New URLs: 1
+Updated URLs: 5
+Removed URLs: 2
+Unchanged URLs: 1017
 Errors: 0
 ==================================================
