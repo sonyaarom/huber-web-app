@@ -1,0 +1,4 @@
+{
+  "error": "relation \"page_embeddings_a\" does not exist\nLINE 4:                         SELECT DISTINCT id FROM page_embeddi...\n                                                        ^\n",
+  "processing_needed": true
+}
