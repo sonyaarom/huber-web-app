@@ -7,6 +7,8 @@
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <!-- Include Marked.js for Markdown conversion -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body, html {
             height: 100%;
@@ -15,220 +17,67 @@
             background-color: #f0f2f5;
             transition: background-color 0.3s ease;
         }
-
         body.dark-mode {
             background-color: #1a1a1a;
             color: #ffffff;
         }
-        
-        .navbar {
-            background-color: #0b3d91;
-            padding: 15px 20px;
-        }
-        
-        .navbar-brand {
-            color: white;
-            font-weight: 600;
-            font-size: 24px;
-        }
-        
-        .navbar-brand img {
-            height: 40px;
-            margin-right: 10px;
-        }
-        
-        .nav-link {
-            color: rgba(255, 255, 255, 0.8);
-            margin: 0 15px;
-            transition: color 0.3s;
-        }
-        
-        .nav-link:hover {
-            color: white;
-        }
-        
-        .nav-link.active {
-            color: white;
-            font-weight: 600;
-        }
-        
-        .navbar .login-btn {
-            background-color: transparent;
-            border: 2px solid white;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            transition: all 0.3s ease;
-            width: auto;
-            margin-top: 0;
-        }
-        
-        .navbar .login-btn:hover {
-            background-color: white;
+        .navbar { background-color: #0b3d91; padding: 15px 20px; }
+        .navbar-brand { color: white; font-weight: 600; font-size: 24px; }
+        .navbar-brand img { height: 40px; margin-right: 10px; }
+        .nav-link { color: rgba(255, 255, 255, 0.8); margin: 0 15px; transition: color 0.3s; }
+        .nav-link:hover { color: white; }
+        .nav-link.active { color: white; font-weight: 600; }
+        .navbar .login-btn { background-color: transparent; border: 2px solid white; color: white; padding: 8px 20px; border-radius: 20px; transition: all 0.3s ease; }
+        .navbar .login-btn:hover { background-color: white; color: #0b3d91; }
+        .search-container { max-width: 800px; margin: 50px auto; padding: 30px; background-color: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .dark-mode .search-container { background-color: #2d2d2d; }
+        .search-header { text-align: center; margin-bottom: 30px; }
+        .search-header h1 { color: #0b3d91; font-weight: 700; margin-bottom: 15px; }
+        .dark-mode .search-header h1 { color: #ffffff; }
+        .search-header p { color: #666; }
+        .dark-mode .search-header p { color: #cccccc; }
+        .search-form { margin-bottom: 30px; }
+        .search-input { width: 100%; padding: 15px; border: 2px solid #0b3d91; border-radius: 30px; font-size: 16px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05); transition: all 0.3s; }
+        .dark-mode .search-input { background-color: #3d3d3d; color: #ffffff; border-color: #4a4a4a; }
+        .search-input:focus { outline: none; box-shadow: 0 5px 20px rgba(11, 61, 145, 0.2); }
+        .search-btn { width: 100%; padding: 15px; background-color: #0b3d91; color: white; border: 2px solid #0b3d91; border-radius: 30px; font-size: 16px; font-weight: 600; margin-top: 15px; transition: all 0.3s; cursor: pointer; }
+        .search-btn:hover { background-color: #082d6e; color: white; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(11, 61, 145, 0.3); }
+        .search-results { display: none; margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9; }
+        .dark-mode .search-results { background-color: #3d3d3d; border-color: #4a4a4a; }
+        .search-results h3 { color: #0b3d91; margin-bottom: 20px; font-weight: 600; }
+        .dark-mode .search-results h3 { color: #ffffff; }
+        .url-list { list-style-type: none; padding-left: 0; }
+        .url-list li { margin-bottom: 15px; padding: 15px; background-color: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); transition: transform 0.3s; }
+        .dark-mode .url-list li { background-color: #2d2d2d; }
+        .url-list li:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
+        .url-list a { color: #0b3d91; text-decoration: none; font-weight: 500; display: block; word-break: break-all; }
+        .dark-mode .url-list a { color: #7aa6ff; }
+        .url-list a:hover { text-decoration: underline; }
+        .footer { background-color: #f0f2f5; padding: 20px; text-align: center; color: #666; font-size: 14px; border-top: 1px solid #ddd; margin-top: 50px; }
+        .dark-mode .footer { background-color: #1a1a1a; color: #cccccc; border-color: #4a4a4a; }
+        /* Additional styling for formatted markdown output */
+        #formatted-output h1,
+        #formatted-output h2,
+        #formatted-output h3 {
             color: #0b3d91;
+            margin-top: 20px;
         }
-        
-        .search-container {
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 30px;
-            background-color: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .dark-mode .search-container {
-            background-color: #2d2d2d;
-        }
-        
-        .search-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .search-header h1 {
-            color: #0b3d91;
-            font-weight: 700;
+        #formatted-output p {
+            font-size: 16px;
+            line-height: 1.5;
             margin-bottom: 15px;
         }
-
-        .dark-mode .search-header h1 {
-            color: #ffffff;
+        #formatted-output ul {
+            list-style-type: disc;
+            margin-left: 20px;
         }
-        
-        .search-header p {
-            color: #666;
-        }
-
-        .dark-mode .search-header p {
-            color: #cccccc;
-        }
-        
-        .search-form {
-            margin-bottom: 30px;
-        }
-        
-        .search-input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #0b3d91;
-            border-radius: 30px;
-            font-size: 16px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s;
-        }
-
-        .dark-mode .search-input {
-            background-color: #3d3d3d;
-            color: #ffffff;
-            border-color: #4a4a4a;
-        }
-        
-        .search-input:focus {
-            outline: none;
-            box-shadow: 0 5px 20px rgba(11, 61, 145, 0.2);
-        }
-
-        .search-btn {
-            width: 100%;
-            padding: 15px;
-            background-color: #0b3d91;
-            color: white;
-            border: 2px solid #0b3d91;
-            border-radius: 30px;
-            font-size: 16px;
-            font-weight: 600;
-            margin-top: 15px;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .search-btn:hover {
-            background-color: #082d6e;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(11, 61, 145, 0.3);
-        }
-        
-        .search-results {
-            display: none;
-            margin-top: 30px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            background-color: #f9f9f9;
-        }
-
-        .dark-mode .search-results {
-            background-color: #3d3d3d;
-            border-color: #4a4a4a;
-        }
-        
-        .search-results h3 {
-            color: #0b3d91;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-
-        .dark-mode .search-results h3 {
-            color: #ffffff;
-        }
-        
-        .url-list {
-            list-style-type: none;
-            padding-left: 0;
-        }
-        
-        .url-list li {
-            margin-bottom: 15px;
-            padding: 15px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s;
-        }
-
-        .dark-mode .url-list li {
-            background-color: #2d2d2d;
-        }
-        
-        .url-list li:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .url-list a {
+        #formatted-output a {
             color: #0b3d91;
             text-decoration: none;
-            font-weight: 500;
-            display: block;
-            word-break: break-all;
         }
-
-        .dark-mode .url-list a {
-            color: #7aa6ff;
-        }
-        
-        .url-list a:hover {
+        #formatted-output a:hover {
             text-decoration: underline;
         }
-        
-        .footer {
-            background-color: #f0f2f5;
-            padding: 20px;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            border-top: 1px solid #ddd;
-            margin-top: 50px;
-        }
-
-        .dark-mode .footer {
-            background-color: #1a1a1a;
-            color: #cccccc;
-            border-color: #4a4a4a;
-        }
-
         /* Settings Panel Styles */
         .settings-panel {
             display: none;
@@ -244,12 +93,10 @@
             width: 350px;
             min-width: 350px;
         }
-
         .dark-mode .settings-panel {
             background-color: #2d2d2d;
             color: #ffffff;
         }
-
         .settings-item {
             display: flex;
             justify-content: space-between;
@@ -257,25 +104,21 @@
             margin-bottom: 20px;
             flex-wrap: nowrap;
         }
-
         .settings-item label {
             margin-bottom: 0;
             white-space: nowrap;
         }
-
         .switch {
             position: relative;
             display: inline-block;
             width: 60px;
             height: 34px;
         }
-
         .switch input {
             opacity: 0;
             width: 0;
             height: 0;
         }
-
         .slider {
             position: absolute;
             cursor: pointer;
@@ -287,7 +130,6 @@
             transition: .4s;
             border-radius: 34px;
         }
-
         .slider:before {
             position: absolute;
             content: "";
@@ -299,15 +141,12 @@
             transition: .4s;
             border-radius: 50%;
         }
-
         input:checked + .slider {
             background-color: #0b3d91;
         }
-
         input:checked + .slider:before {
             transform: translateX(26px);
         }
-
         .close-btn {
             position: absolute;
             right: 15px;
@@ -316,17 +155,14 @@
             cursor: pointer;
             color: #666;
         }
-
         .dark-mode .close-btn {
             color: #cccccc;
         }
-
         #fontSizeSelect {
             width: 120px;
             min-width: 120px;
         }
-
-        /* Keep the modal login button style */
+        /* Modal login styling */
         .modal-body .btn-login {
             background-color: #0b3d91;
             color: white;
@@ -337,45 +173,36 @@
             width: 100%;
             margin-top: 10px;
         }
-        
         .modal-body .btn-login:hover {
             background-color: #082d6e;
         }
-
-        
         .login-modal-content {
             border-radius: 0;
             border: none;
         }
-
         .login-modal-header {
             background-color: #0b3d91;
             color: white;
             border-radius: 0;
             padding: 15px 20px;
         }
-
         .login-close {
             color: white;
             opacity: 1;
             font-size: 28px;
         }
-
         .login-modal-body {
             padding: 30px;
         }
-
         .login-form-group {
             margin-bottom: 25px;
         }
-
         .login-form-group label {
             display: block;
             font-size: 18px;
             margin-bottom: 10px;
             color: #333;
         }
-
         .login-input {
             width: 100%;
             padding: 12px;
@@ -383,18 +210,15 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-
         .login-checkbox-container {
             display: flex;
             align-items: center;
             margin-bottom: 25px;
         }
-
         .login-checkbox-container input {
             margin-right: 10px;
             transform: scale(1.2);
         }
-
         .login-submit-btn {
             width: 100%;
             background-color: #0b3d91;
@@ -405,12 +229,10 @@
             border-radius: 4px;
             cursor: pointer;
         }
-
         .forgot-password-container {
             text-align: right;
             margin-top: 15px;
         }
-
         .forgot-password-link {
             color: #0b3d91;
             text-decoration: none;
@@ -432,7 +254,6 @@
                 <i class="fas fa-cog"></i>
                 <span>Settings</span>
             </a>
-        </div>
         </div>
         <div class="ml-auto">
             <button class="login-btn" data-toggle="modal" data-target="#loginModal">
@@ -459,6 +280,9 @@
             <h3>Search Results</h3>
             <ul id="url-list" class="url-list"></ul>
         </div>
+        
+        <!-- Container for Formatted Model Output -->
+        <div id="formatted-output" class="search-results mt-4"></div>
     </div>
     
     <!-- Footer -->
@@ -528,23 +352,30 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
         $(document).ready(function() {
+            // Debug: Log that Marked is loaded
+            console.log("Marked loaded:", typeof marked);
+
             // Handle search form submission
             $('#search-form').submit(function(e) {
                 e.preventDefault();
                 const question = $('#search-input').val();
                 
-                // Show loading state
+                // Clear previous results
+                $('#url-list').empty();
+                $('#formatted-output').empty();
+                
+                // Show loading indicators
                 $('#url-list').html('<li>Searching for relevant sources...</li>');
+                $('#formatted-output').html('<p>Retrieving answer...</p>');
                 $('#search-results').show();
                 
-                // Send AJAX request to retrieve URLs
+                // AJAX call to retrieve URLs
                 $.ajax({
                     type: 'POST',
                     url: '/retrieve_urls',
                     data: { 'question': question },
                     success: function(response) {
                         $('#url-list').empty();
-                        
                         if (response.urls && response.urls.length > 0) {
                             response.urls.forEach(function(url) {
                                 $('#url-list').append(`<li><a href="${url}" target="_blank">${url}</a></li>`);
@@ -558,13 +389,32 @@
                         console.error('Error retrieving URLs:', error);
                     }
                 });
+                
+                // AJAX call to retrieve the model's answer in raw Markdown
+                $.ajax({
+                    type: 'POST',
+                    url: '/retrieve_output',
+                    data: { 'question': question },
+                    success: function(response) {
+                        console.log("Raw output response:", response);
+                        const rawMarkdown = response.output;
+                        
+                        // Use appropriate marked API depending on version
+                        const htmlContent = (typeof marked.parse === "function") ? marked.parse(rawMarkdown) : marked(rawMarkdown);
+                        
+                        console.log("Converted HTML:", htmlContent);
+                        $('#formatted-output').html(htmlContent);
+                    },
+                    error: function(error) {
+                        $('#formatted-output').html('<p>Error retrieving answer. Please try again.</p>');
+                        console.error('Error retrieving output:', error);
+                    }
+                });
             });
             
             // Handle login form submission
             $('#login-form').submit(function(e) {
                 e.preventDefault();
-                // Here you would normally send the login data to the server
-                // For now, we'll just close the modal and show an alert
                 $('#loginModal').modal('hide');
                 alert('Login functionality will be implemented soon!');
             });
@@ -599,14 +449,12 @@
 
             darkModeToggle.addEventListener('change', () => {
                 document.body.classList.toggle('dark-mode');
-                // Save dark mode preference
                 localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
             });
 
             fontSizeSelect.addEventListener('change', (event) => {
                 document.body.style.fontSize = event.target.value === 'small' ? '12px' :
                                              event.target.value === 'medium' ? '16px' : '20px';
-                // Save font size preference
                 localStorage.setItem('fontSize', event.target.value);
             });
 

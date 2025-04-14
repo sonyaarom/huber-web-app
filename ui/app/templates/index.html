@@ -1,960 +1,1221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>HUBer Chat Bot</title>
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-    <style>
-        body, html {
-            height: 100%;
-            margin: 0;
-            font-family: 'Poppins', sans-serif;
-            background-color: #f0f2f5;
-            transition: background-color 0.3s ease;
-        }
-
-        body.dark-mode {
-            background-color: #1a1a1a;
-            color: #ffffff;
-        }
-
-        .wrapper {
-            display: flex;
-            height: 100vh;
-        }
-
-        .sidebar {
-            width: 80px;
-            background-color: #0b3d91;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px 0;
-            transition: width 0.3s ease;
-        }
-
-        .sidebar:hover {
-            width: 200px;
-        }
-
-        .sidebar-icon {
-            color: white;
-            font-size: 24px;
-            margin-bottom: 30px;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            padding-left: 28px;
-            position: relative;
-        }
-
-        .sidebar-icon:hover {
-            transform: scale(1.1);
-        }
-
-        .sidebar:hover .sidebar-text {
-            display: inline;
-            margin-left: 10px;
-        }
-
-        .sidebar-text {
-            display: none;
-            color: white;
-            font-size: 14px;
-        }
-
-        .tooltip {
-            position: absolute;
-            top: 50%;
-            left: 100%;
-            margin-left: 10px;
-            padding: 5px 10px;
-            background-color: #000;
-            color: #fff;
-            border-radius: 4px;
-            white-space: nowrap;
-            transform: translateY(-50%);
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
-        }
-
-        .sidebar-icon:hover .tooltip {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            max-width: 1000px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .main-header {
-            border-bottom: 2px solid #0b3d91;
-            color: #0b3d91;
-            padding: 10px 0;
-            text-align: left;
-            display: flex;
-            align-items: center;
-        }
-
-        .dark-mode .main-header {
-            border-bottom-color: #ffffff;
-            color: #ffffff;
-        }
-
-        .logo {
-            width: 50px;
-            height: auto;
-            margin-right: 15px;
-        }
-
-        .main-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            min-height: 400px; /* Ensure minimum height for content area */
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end; /* Push content to the bottom */
-        }
-
-        .messages-container {
-            margin-top: auto; /* Push messages to the bottom */
-        }
-
-        .main-content ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        .main-content ul li {
-            margin-bottom: 20px;
-            animation: fadeIn 0.5s ease;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .main-content ul li.bot-message {
-            align-items: flex-start;
-        }
-
-        .main-content ul li.user-message {
-            align-items: flex-end;
-        }
-
-        .main-content ul li .message-content {
-            max-width: 80%;
-            padding: 15px;
-            border-radius: 20px;
-            word-wrap: break-word;
-        }
-
-        .main-content ul li.bot-message .message-content {
-            background-color: #f0f2f5;  /* Light grey background */
-            color: black;  /* Black text color */
-            border-radius: 0 20px 20px 20px;  /* Rounded corners except top-left */
-            padding: 15px;
-            max-width: 80%;
-            word-wrap: break-word;
-        }
-
-        .main-content ul li.user-message .message-content {
-            background-color: #0b3d91;
-            color: white;
-            border-radius: 20px 0 20px 20px;
-        }
-
-        .dark-mode .main-content ul li.bot-message .message-content {
-            background-color: #2a2a2a;  /* Darker background for dark mode */
-            color: white;  /* White text for dark mode */
-        }
-
-        .dark-mode .main-content ul li.user-message .message-content {
-            background-color: #0b3d91;
-        }
-
-        .feedback {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 5px;
-        }
-
-        .feedback i {
-            cursor: pointer;
-            margin-left: 10px;
-            color: #0b3d91;
-            transition: transform 0.3s ease, color 0.3s ease;
-        }
-
-        .feedback i:hover {
-            transform: scale(1.2);
-        }
-
-        .feedback i.active {
-            color: #28a745;
-        }
-
-        .feedback i.active.fa-thumbs-down {
-            color: #dc3545;
-        }
-
-        .dark-mode .feedback i {
-            color: #ffffff;
-        }
-
-        .dark-mode .feedback i.active {
-            color: #28a745;
-        }
-
-        .dark-mode .feedback i.active.fa-thumbs-down {
-            color: #dc3545;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .input-form {
-            display: flex;
-            padding: 20px;
-            background-color: #f0f2f5;
-            border-top: 1px solid #ddd;
-            position: sticky;
-            bottom: 0;
-            width: 100%;
-        }
-
-        .dark-mode .input-form {
-            background-color: #2a2a2a;
-            border-top-color: #444444;
-        }
-
-        .input-form input {
-            flex: 1;
-            padding: 15px;
-            font-size: 16px;
-            border: 2px solid #0b3d91;
-            border-radius: 25px;
-            margin-right: 10px;
-            transition: 0.3s;
-        }
-
-        .dark-mode .input-form input {
-            background-color: #333333;
-            color: #ffffff;
-            border-color: #ffffff;
-        }
-
-        .input-form input:focus {
-            border-color: #0b3d91;
-            box-shadow: 0 0 10px rgba(11, 61, 145, 0.3);
-        }
-
-        .input-form button {
-            padding: 15px 30px;
-            font-size: 16px;
-            background-color: #0b3d91;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: 0.3s;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-
-        .input-form button:hover {
-            background-color: #082d6e;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(11, 61, 145, 0.3);
-        }
-
-        /* Add styles for the sources container */
-        .sources-container {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #ddd;
-            font-size: 0.9em;
-        }
-        
-        .sources-container h5 {
-            font-size: 1em;
-            margin-bottom: 5px;
-            color: #0b3d91;
-        }
-        
-        .sources-container ul {
-            padding-left: 20px;
-            margin-bottom: 0;
-        }
-        
-        .sources-container a {
-            color: #0b3d91;
-            text-decoration: underline;
-            word-break: break-all;
-        }
-        
-        .dark-mode .sources-container h5,
-        .dark-mode .sources-container a {
-            color: #6c9fff;
-        }
-
-        .how-to-use {
-            position: fixed;
-            right: 20px;
-            top: 20px;
-            background-color: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 20px;
-            width: 300px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            display: none;
-            backdrop-filter: blur(5px);
-            animation: slideIn 0.3s ease;
-            z-index: 100;
-        }
-
-        .dark-mode .how-to-use {
-            background-color: rgba(42, 42, 42, 0.9);
-            color: #ffffff;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-        }
-
-        .how-to-use h3 {
-            color: #0b3d91;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-
-        .dark-mode .how-to-use h3 {
-            color: #ffffff;
-        }
-
-        .rule-cloud {
-            background-color: #ffffff;
-            border-radius: 20px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            transition: 0.3s;
-        }
-
-        .dark-mode .rule-cloud {
-            background-color: #333333;
-            color: #ffffff;
-        }
-
-        .rule-cloud:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .how-to-use-btn {
-            position: fixed;
-            right: 20px;
-            top: 20px;
-            background-color: #0b3d91;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 10px 20px;
-            cursor: pointer;
-            transition: 0.3s;
-            font-weight: 600;
-            letter-spacing: 1px;
-            z-index: 99;
-        }
-
-        .how-to-use-btn:hover {
-            background-color: #082d6e;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(11, 61, 145, 0.3);
-        }
-
-        .close-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: pointer;
-            font-size: 28px;
-            color: #0b3d91;
-            font-weight: bold;
-            transition: transform 0.3s;
-        }
-
-        .close-btn:hover {
-            transform: rotate(90deg);
-        }
-
-        .dark-mode .close-btn {
-            color: #ffffff;
-        }
-
-        .contact-info {
-            background-color: #e8f4ff;
-            color: #0b3d91;
-            padding: 15px;
-            border-radius: 15px;
-            margin-top: 20px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .dark-mode .contact-info {
-            background-color: #333333;
-            color: #ffffff;
-        }
-
-        .contact-info strong {
-            font-weight: 600;
-        }
-
-        .examples {
-            margin-top: 20px;
-        }
-
-        .bad-example, .good-example {
-            padding: 10px;
-            border-radius: 15px;
-            margin-bottom: 10px;
-        }
-
-        .bad-example {
-            background-color: #ffe8e8;
-            color: #d32f2f;
-        }
-
-        .good-example {
-            background-color: #e8f5e9;
-            color: #388e3c;
-        }
-
-        .dark-mode .bad-example {
-            background-color: #4a0000;
-            color: #ff9999;
-        }
-
-        .dark-mode .good-example {
-            background-color: #004d00;
-            color: #99ff99;
-        }
-
-        .settings-panel {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            width: 350px;
-            min-width: 350px;
-        }
-
-        .dark-mode .settings-panel {
-            background-color: #2d2d2d;
-            color: white;
-        }
-
-        .settings-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: nowrap;
-        }
-
-        .settings-item label {
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-        }
-
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: #0b3d91;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-
-        .close-btn {
-            position: absolute;
-            right: 15px;
-            top: 10px;
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
-        }
-
-        .dark-mode .close-btn {
-            color: #cccccc;
-        }
-
-        #fontSizeSelect {
-            width: 120px;
-            min-width: 120px;
-        }
-
-        .bot-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-
-        .main-content ul li.bot-message {
-            align-items: flex-start;
-            display: flex;
-        }
-
-        .bot-message-container {
-            display: flex;
-            align-items: flex-start;
-        }
-
-        /* Empty space placeholder */
-        .empty-space {
-            flex: 1;
-            min-height: 300px; /* Adjust this value to control the amount of space */
-        }
-
-        /* Login Modal Styles */
-        .modal-content {
-            border-radius: 15px;
-            border: none;
-        }
-
-        .modal-header {
-            background-color: #0b3d91;
-            color: white;
-            border-radius: 15px 15px 0 0;
-        }
-
-        .modal-title {
-            font-weight: 600;
-        }
-
-        .close {
-            color: white;
-        }
-
-        .btn-login {
-            background-color: #0b3d91;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-weight: 600;
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        .btn-login:hover {
-            background-color: #082d6e;
-        }
-
-        .forgot-password {
-            text-align: center;
-            margin-top: 15px;
-        }
-
-        .forgot-password a {
-            color: #0b3d91;
-            text-decoration: none;
-        }
-
-        .forgot-password a:hover {
-            text-decoration: underline;
-        }
-
-        /* Position the login icon at the bottom of the sidebar */
-        #login-icon {
-            margin-top: auto;
-            margin-bottom: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>HUBer Chat Bot</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+  <!-- Include Marked.js for client-side markdown conversion -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background-color: #f0f2f5;
+      transition: background-color 0.3s ease;
+    }
+    body.dark-mode {
+      background-color: #1a1a1a;
+      color: #ffffff;
+    }
+    .wrapper {
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 80px;
+      background-color: #0b3d91;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0;
+      transition: width 0.3s ease;
+    }
+    .sidebar:hover {
+      width: 200px;
+    }
+    .sidebar-icon {
+      color: white;
+      font-size: 24px;
+      margin-bottom: 30px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding-left: 28px;
+      position: relative;
+    }
+    .sidebar-icon:hover {
+      transform: scale(1.1);
+    }
+    .sidebar:hover .sidebar-text {
+      display: inline;
+      margin-left: 10px;
+    }
+    .sidebar-text {
+      display: none;
+      color: white;
+      font-size: 14px;
+    }
+    .tooltip {
+      position: absolute;
+      top: 50%;
+      left: 100%;
+      margin-left: 10px;
+      padding: 5px 10px;
+      background-color: #000;
+      color: #fff;
+      border-radius: 4px;
+      white-space: nowrap;
+      transform: translateY(-50%);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+    .sidebar-icon:hover .tooltip {
+      opacity: 1;
+      visibility: visible;
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 1000px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .main-header {
+      border-bottom: 2px solid #0b3d91;
+      color: #0b3d91;
+      padding: 10px 0;
+      text-align: left;
+      display: flex;
+      align-items: center;
+    }
+    .dark-mode .main-header {
+      border-bottom-color: #ffffff;
+      color: #ffffff;
+    }
+    .logo {
+      width: 50px;
+      height: auto;
+      margin-right: 15px;
+    }
+    .main-content {
+        flex: 1;
+        /* Remove or adjust the justify-content if it interferes with scrolling */
+        /* justify-content: flex-end; */
+        overflow-y: auto;
+        padding: 20px;
+        min-height: 400px;
+        display: flex;
+        flex-direction: column;
+        }
+
+    .messages-container {
+        max-height: 100vh;  /* Change this value as needed */
+        overflow-y: auto;
+        /* Optionally add a slight right padding if the scrollbar overlaps your content */
+        padding-right: 10px;
+        }
+    .main-content ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    .main-content ul li {
+      margin-bottom: 20px;
+      animation: fadeIn 0.5s ease;
+      display: flex;
+      flex-direction: column;
+    } 
+    .main-content ul li.bot-message {
+      align-items: flex-start;
+    }
+    .main-content ul li.user-message {
+      align-items: flex-end;
+    }
+    .main-content ul li .message-content {
+      max-width: 80%;
+      padding: 15px;
+      border-radius: 20px;
+      word-wrap: break-word;
+      white-space: normal;
+      line-height: 1.5;
+    }
+    /* Markdown content styles */
+    .message-content h1,
+    .message-content h2,
+    .message-content h3,
+    .message-content h4,
+    .message-content h5,
+    .message-content h6 {
+      margin: 0.5rem 0;
+      line-height: 1.5;
+      font-size: 1rem;
+      font-weight: normal;
+      color: inherit;
+    }
+
+    .message-content h1, 
+    .message-content h2, 
+    .message-content h3, 
+    .message-content h4, 
+    .message-content h5, 
+    .message-content h6 { 
+      font-size: 1rem; 
+    }
+
+    .message-content p {
+      margin: 0.5rem 0;
+      line-height: 1.5;
+    }
+
+    .message-content ul,
+    .message-content ol {
+      margin: 0.5rem 0;
+      padding-left: 1.5rem;
+    }
+
+    .message-content li {
+      margin: 0.25rem 0;
+      line-height: 1.5;
+    }
+    /* Add styles for text elements */
+    .message-content strong {
+      font-weight: 600;
+      color: #0b3d91;
+    }
+
+    .dark-mode .message-content strong {
+      color: #6c9fff;
+    }
+
+    .message-content em {
+      font-style: italic;
+    }
+
+    /* Improve spacing between elements */
+    .message-content > *:first-child {
+      margin-top: 0;
+    }
+
+    .message-content > *:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Add styles for lists */
+    .message-content ul, .message-content ol {
+      margin: 0.75rem 0;
+      padding-left: 1.5rem;
+      list-style-position: outside;
+    }
+
+    .message-content li {
+      margin: 0.5rem 0;
+      line-height: 1.5;
+      padding-left: 0.5rem;
+    }
+
+    /* Nested list styles */
+    .message-content li > ul,
+    .message-content li > ol {
+      margin: 0.25rem 0 0.25rem 1rem;
+      list-style-type: none;
+    }
+
+    .message-content li > ul > li,
+    .message-content li > ol > li {
+      position: relative;
+      padding-left: 1.2rem;
+    }
+
+    .message-content li > ul > li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #0b3d91;
+    }
+
+    .dark-mode .message-content li > ul > li::before {
+      color: #6c9fff;
+    }
+
+    /* Section styles */
+    .message-content section {
+      margin: 1rem 0;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(11, 61, 145, 0.1);
+    }
+
+    .dark-mode .message-content section {
+      border-bottom-color: rgba(108, 159, 255, 0.1);
+    }
+
+    .message-content section:last-child {
+      border-bottom: none;
+    }
+
+    /* Contact info styles */
+    .message-content .contact-info {
+      background-color: rgba(11, 61, 145, 0.05);
+      padding: 1rem;
+      border-radius: 10px;
+      margin: 0.5rem 0;
+    }
+
+    .dark-mode .message-content .contact-info {
+      background-color: rgba(108, 159, 255, 0.05);
+    }
+
+    .main-content ul li.bot-message .message-content {
+      background-color: #f0f2f5;
+      color: black;
+      border-radius: 0 20px 20px 20px;
+      padding: 15px;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+    .main-content ul li.user-message .message-content {
+      background-color: #0b3d91;
+      color: white;
+      border-radius: 20px 0 20px 20px;
+    }
+    .dark-mode .main-content ul li.bot-message .message-content {
+      background-color: #2a2a2a;
+      color: white;
+    }
+    .dark-mode .main-content ul li.user-message .message-content {
+      background-color: #0b3d91;
+    }
+    .feedback {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 5px;
+    }
+    .feedback i {
+      cursor: pointer;
+      margin-left: 10px;
+      color: #0b3d91;
+      transition: transform 0.3s ease, color 0.3s ease;
+    }
+    .feedback i:hover {
+      transform: scale(1.2);
+    }
+    .feedback i.active {
+      color: #28a745;
+    }
+    .feedback i.active.fa-thumbs-down {
+      color: #dc3545;
+    }
+    .dark-mode .feedback i {
+      color: #ffffff;
+    }
+    .dark-mode .feedback i.active {
+      color: #28a745;
+    }
+    .dark-mode .feedback i.active.fa-thumbs-down {
+      color: #dc3545;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .input-form {
+      display: flex;
+      padding: 20px;
+      background-color: #f0f2f5;
+      border-top: 1px solid #ddd;
+      position: sticky;
+      bottom: 0;
+      width: 100%;
+    }
+    .dark-mode .input-form {
+      background-color: #2a2a2a;
+      border-top-color: #444444;
+    }
+    .input-form input {
+      flex: 1;
+      padding: 15px;
+      font-size: 16px;
+      border: 2px solid #0b3d91;
+      border-radius: 25px;
+      margin-right: 10px;
+      transition: 0.3s;
+    }
+    .dark-mode .input-form input {
+      background-color: #333333;
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+    .input-form input:focus {
+      border-color: #0b3d91;
+      box-shadow: 0 0 10px rgba(11, 61, 145, 0.3);
+    }
+    .input-form button {
+      padding: 15px 30px;
+      font-size: 16px;
+      background-color: #0b3d91;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: 0.3s;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .input-form button:hover {
+      background-color: #082d6e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(11, 61, 145, 0.3);
+    }
+    /* Sources container styles */
+    .sources-container {
+      margin-top: 15px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+      font-size: 0.9em;
+    }
+    .sources-container h5 {
+      font-size: 1em;
+      margin-bottom: 5px;
+      color: #0b3d91;
+    }
+    .sources-container ul {
+      padding-left: 20px;
+      margin-bottom: 0;
+    }
+    .sources-container a {
+      color: #0b3d91;
+      text-decoration: underline;
+      word-break: break-all;
+    }
+    .dark-mode .sources-container h5,
+    .dark-mode .sources-container a {
+      color: #6c9fff;
+    }
+    .how-to-use {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 15px;
+      padding: 20px;
+      width: 300px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      display: none;
+      backdrop-filter: blur(5px);
+      animation: slideIn 0.3s ease;
+      z-index: 100;
+    }
+    .dark-mode .how-to-use {
+      background-color: rgba(42, 42, 42, 0.9);
+      color: #ffffff;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .how-to-use h3 {
+      color: #0b3d91;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+    .dark-mode .how-to-use h3 {
+      color: #ffffff;
+    }
+    .rule-cloud {
+      background-color: #ffffff;
+      border-radius: 20px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      transition: 0.3s;
+    }
+    .dark-mode .rule-cloud {
+      background-color: #333333;
+      color: #ffffff;
+    }
+    .rule-cloud:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
+    .how-to-use-btn {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      background-color: #0b3d91;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: 0.3s;
+      font-weight: 600;
+      letter-spacing: 1px;
+      z-index: 99;
+    }
+    .how-to-use-btn:hover {
+      background-color: #082d6e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(11, 61, 145, 0.3);
+    }
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      cursor: pointer;
+      font-size: 28px;
+      color: #0b3d91;
+      font-weight: bold;
+      transition: transform 0.3s;
+    }
+    .close-btn:hover {
+      transform: rotate(90deg);
+    }
+    .dark-mode .close-btn {
+      color: #ffffff;
+    }
+    .contact-info {
+      background-color: #e8f4ff;
+      color: #0b3d91;
+      padding: 15px;
+      border-radius: 15px;
+      margin-top: 20px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .dark-mode .contact-info {
+      background-color: #333333;
+      color: #ffffff;
+    }
+    .contact-info strong {
+      font-weight: 600;
+    }
+    .examples {
+      margin-top: 20px;
+    }
+    .bad-example, .good-example {
+      padding: 10px;
+      border-radius: 15px;
+      margin-bottom: 10px;
+    }
+    .bad-example {
+      background-color: #ffe8e8;
+      color: #d32f2f;
+    }
+    .good-example {
+      background-color: #e8f5e9;
+      color: #388e3c;
+    }
+    .dark-mode .bad-example {
+      background-color: #4a0000;
+      color: #ff9999;
+    }
+    .dark-mode .good-example {
+      background-color: #004d00;
+      color: #99ff99;
+    }
+    .settings-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      width: 350px;
+      min-width: 350px;
+    }
+    .dark-mode .settings-panel {
+      background-color: #2d2d2d;
+      color: white;
+    }
+    .settings-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: nowrap;
+    }
+    .settings-item label {
+      margin-bottom: 0;
+      white-space: nowrap;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #0b3d91;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .close-btn {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+    .dark-mode .close-btn {
+      color: #cccccc;
+    }
+    #fontSizeSelect {
+      width: 120px;
+      min-width: 120px;
+    }
+    .bot-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    .main-content ul li.bot-message {
+      align-items: flex-start;
+      display: flex;
+    }
+    .bot-message-container {
+      display: flex;
+      align-items: flex-start;
+    }
+    /* Empty space placeholder */
+    .empty-space {
+      flex: 1;
+      min-height: 300px;
+    }
+    /* Typing indicator styles */
+    .bot-response {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 10px 15px;
+      background-color: #f0f2f5;
+      border-radius: 20px;
+      max-width: 100px;
+    }
+
+    .dark-mode .bot-response {
+      background-color: #2a2a2a;
+      color: white;
+    }
+
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+    }
+
+    .dots-container {
+      display: flex;
+      gap: 4px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background-color: #0b3d91;
+      border-radius: 50%;
+      animation: dotFade 1.4s infinite;
+      opacity: 0.3;
+    }
+
+    .dark-mode .dot {
+      background-color: white;
+    }
+
+    .dot:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes dotFade {
+      0%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    /* Login Modal Styles */
+    .modal-content {
+      border-radius: 15px;
+      border: none;
+    }
+    .modal-header {
+      background-color: #0b3d91;
+      color: white;
+      border-radius: 15px 15px 0 0;
+    }
+    .modal-title {
+      font-weight: 600;
+    }
+    .close {
+      color: white;
+    }
+    .btn-login {
+      background-color: #0b3d91;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .btn-login:hover {
+      background-color: #082d6e;
+    }
+    .forgot-password {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .forgot-password a {
+      color: #0b3d91;
+      text-decoration: none;
+    }
+    .forgot-password a:hover {
+      text-decoration: underline;
+    }
+    /* Position the login icon at the bottom of the sidebar */
+    #login-icon {
+      margin-top: auto;
+      margin-bottom: 20px;
+    }
+  </style>
 </head>
 <body>
-    <div class="wrapper">
-        <div class="sidebar">
-            <div class="sidebar-icon" id="home-icon">
-                <i class="fas fa-home"></i>
-                <span class="sidebar-text">Home</span>
-                <div class="tooltip">Home</div>
-            </div>
-            <div class="sidebar-icon" id="new-chat">
-                <i class="fas fa-plus"></i>
-                <span class="sidebar-text">New Chat</span>
-                <div class="tooltip">New Chat</div>
-            </div>
-            <div class="sidebar-icon" id="url-icon">
-                <i class="fas fa-search"></i>
-                <span class="sidebar-text">Find Sources</span>
-                <div class="tooltip">Find Sources</div>
-            </div>
-            <div class="sidebar-icon" id="settings-icon">
-                <i class="fas fa-cog"></i>
-                <span class="sidebar-text">Settings</span>
-                <div class="tooltip">Settings</div>
-            </div>
-            <div class="sidebar-icon" id="login-icon" data-toggle="modal" data-target="#loginModal">
-                <i class="fas fa-user-circle"></i>
-                <span class="sidebar-text">Login</span>
-                <div class="tooltip">Login</div>
-            </div>
-        </div>
-        <div class="main">
-            <div class="main-header">
-                <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Logo" class="logo">
-                <h1>HUBer Chat Bot</h1>
-            </div>
-            <div class="main-content">
-                <div class="empty-space"></div>
-                <div class="messages-container">
-                    <ul id="messages" class="list-group"></ul>
-                </div>
-            </div>
-            <form id="chat-form" class="input-form">
-                <input id="message" class="form-control" placeholder="Type your message here..." autocomplete="off" required>
-                <button class="btn btn-primary" type="submit">Send</button>
-            </form>
-        </div>
+  <div class="wrapper">
+    <div class="sidebar">
+      <div class="sidebar-icon" id="home-icon">
+        <i class="fas fa-home"></i>
+        <span class="sidebar-text">Home</span>
+        <div class="tooltip">Home</div>
+      </div>
+      <div class="sidebar-icon" id="new-chat">
+        <i class="fas fa-plus"></i>
+        <span class="sidebar-text">New Chat</span>
+        <div class="tooltip">New Chat</div>
+      </div>
+      <div class="sidebar-icon" id="url-icon">
+        <i class="fas fa-search"></i>
+        <span class="sidebar-text">Find Sources</span>
+        <div class="tooltip">Find Sources</div>
+      </div>
+      <div class="sidebar-icon" id="settings-icon">
+        <i class="fas fa-cog"></i>
+        <span class="sidebar-text">Settings</span>
+        <div class="tooltip">Settings</div>
+      </div>
+      <div class="sidebar-icon" id="login-icon" data-toggle="modal" data-target="#loginModal">
+        <i class="fas fa-user-circle"></i>
+        <span class="sidebar-text">Login</span>
+        <div class="tooltip">Login</div>
+      </div>
     </div>
-
-    <button class="how-to-use-btn">How to Use</button>
-
-    <div class="how-to-use">
-        <span class="close-btn">&times;</span>
-        <h3>How to Use:</h3>
-        <div class="rule-cloud">Write your question in the input box.</div>
-        <div class="rule-cloud">Ensure your question is clear and concise.</div>
-        <div class="rule-cloud">Provide context and specific details when asking.</div>
-        <div class="rule-cloud">Please note that the chatbot is still learning! Double-check its answers.</div>
-        <div class="examples">
-            <p class="bad-example">Bad example: What is this?</p>
-            <p class="good-example">Good example: When is the semester break for winter semester 2024?</p>
+    <div class="main">
+      <div class="main-header">
+        <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Logo" class="logo">
+        <h1>HUBer Chat Bot</h1>
+      </div>
+      <div class="main-content">
+        <!-- <div class="empty-space"></div> -->
+        <div class="messages-container">
+          <ul id="messages" class="list-group"></ul>
         </div>
+      </div>
+      <form id="chat-form" class="input-form">
+        <input id="message" class="form-control" placeholder="Type your message here..." autocomplete="off" required>
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
     </div>
-
-    <div class="contact-info">
-        <p>Questions, complaints, or suggestions? Contact: <strong>s.konchakova@student.hu-berlin.de</strong></p>
+  </div>
+  
+  <button class="how-to-use-btn">How to Use</button>
+  
+  <div class="how-to-use">
+    <span class="close-btn">&times;</span>
+    <h3>How to Use:</h3>
+    <div class="rule-cloud">Write your question in the input box.</div>
+    <div class="rule-cloud">Ensure your question is clear and concise.</div>
+    <div class="rule-cloud">Provide context and specific details when asking.</div>
+    <div class="rule-cloud">Please note that the chatbot is still learning! Double-check its answers.</div>
+    <div class="examples">
+      <p class="bad-example">Bad example: What is this?</p>
+      <p class="good-example">Good example: When is the semester break for winter semester 2024?</p>
     </div>
-
-    <div class="settings-panel" id="settings-panel">
-        <span class="close-btn" id="settings-close-btn">&times;</span>
-        <h3>Settings</h3>
-        <div class="settings-item">
-            <label for="darkModeToggle">Dark Mode</label>
-            <label class="switch">
-                <input type="checkbox" id="darkModeToggle">
-                <span class="slider"></span>
-            </label>
+  </div>
+  
+  <div class="contact-info">
+    <p>Questions, complaints, or suggestions? Contact: <strong>s.konchakova@student.hu-berlin.de</strong></p>
+  </div>
+  
+  <div class="settings-panel" id="settings-panel">
+    <span class="close-btn" id="settings-close-btn">&times;</span>
+    <h3>Settings</h3>
+    <div class="settings-item">
+      <label for="darkModeToggle">Dark Mode</label>
+      <label class="switch">
+        <input type="checkbox" id="darkModeToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="settings-item">
+      <label for="fontSizeSelect">Font Size</label>
+      <select id="fontSizeSelect" class="form-control">
+        <option value="small">Small</option>
+        <option value="medium" selected>Medium</option>
+        <option value="large">Large</option>
+      </select>
+    </div>
+  </div>
+  
+  <!-- Login Modal -->
+  <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="loginModalLabel">Login to HUBer</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
         </div>
-        <div class="settings-item">
-            <label for="fontSizeSelect">Font Size</label>
-            <select id="fontSizeSelect" class="form-control">
-                <option value="small">Small</option>
-                <option value="medium" selected>Medium</option>
-                <option value="large">Large</option>
-            </select>
-        </div>
-    </div>
-
-    <!-- Login Modal -->
-    <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="loginModalLabel">Login to HUBer</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <form id="login-form">
-                        <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" class="form-control" id="username" placeholder="Enter your username">
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" class="form-control" id="password" placeholder="Enter your password">
-                        </div>
-                        <div class="form-group form-check">
-                            <input type="checkbox" class="form-check-input" id="rememberMe">
-                            <label class="form-check-label" for="rememberMe">Remember me</label>
-                        </div>
-                        <button type="submit" class="btn btn-login">Login</button>
-                        <div class="forgot-password">
-                            <a href="#">Forgot password?</a>
-                        </div>
-                    </form>
-                </div>
+        <div class="modal-body">
+          <form id="login-form">
+            <div class="form-group">
+              <label for="username">Username</label>
+              <input type="text" class="form-control" id="username" placeholder="Enter your username">
             </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input type="password" class="form-control" id="password" placeholder="Enter your password">
+            </div>
+            <div class="form-group form-check">
+              <input type="checkbox" class="form-check-input" id="rememberMe">
+              <label class="form-check-label" for="rememberMe">Remember me</label>
+            </div>
+            <button type="submit" class="btn btn-login">Login</button>
+            <div class="forgot-password">
+              <a href="#">Forgot password?</a>
+            </div>
+          </form>
         </div>
+      </div>
     </div>
-
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            var socket = io.connect('http://' + document.domain + ':' + location.port);
-            var form = document.getElementById('chat-form');
-            var input = document.getElementById('message');
-            var messages = document.getElementById('messages');
-    
-            // Settings elements
-            const settingsIcon = document.getElementById('settings-icon');
-            const settingsPanel = document.getElementById('settings-panel');
-            const settingsCloseBtn = document.getElementById('settings-close-btn');
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            const fontSizeSelect = document.getElementById('fontSizeSelect');
-    
-            // Apply saved settings immediately
-            if (localStorage.getItem('darkMode') === 'true') {
-                document.body.classList.add('dark-mode');
-                darkModeToggle.checked = true;
+  </div>
+  
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      // Custom function to handle markdown conversion with special attention to headings
+      function parseMarkdown(text) {
+        if (typeof text !== 'string') {
+          console.error('Expected string for markdown parsing, got:', typeof text);
+          return '';
+        }
+        
+        // Process text line by line
+        let lines = text.split('\n');
+        let htmlOutput = [];
+        let inList = false;
+        let listItems = [];
+        let listType = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i].trim();
+          
+          // Skip empty lines
+          if (line === '') {
+            if (inList) {
+              // Close the list if we were in one
+              htmlOutput.push(`</${listType}>`);
+              inList = false;
+              listItems = [];
+            }
+            htmlOutput.push('<p></p>');
+            continue;
+          }
+          
+          // Convert header syntax to regular text (remove the # symbols)
+          if (line.startsWith('#')) {
+            // Count the number of # symbols
+            let headerLevel = 0;
+            while (line[headerLevel] === '#' && headerLevel < line.length) {
+              headerLevel++;
             }
             
-            const savedFontSize = localStorage.getItem('fontSize') || 'medium';
-            document.body.style.fontSize = savedFontSize === 'small' ? '12px' :
-                                          savedFontSize === 'medium' ? '16px' : '20px';
-            if (fontSizeSelect) {
-                fontSizeSelect.value = savedFontSize;
-            }
-    
-            form.onsubmit = function(e) {
-                e.preventDefault();
-                appendUserMessage(input.value);
-                socket.send(input.value);
-                input.value = '';
-                showBotResponseAnimation();
-            };
-    
-            function showBotResponseAnimation() {
-                var botResponse = document.createElement('li');
-                botResponse.className = 'bot-response';
-                botResponse.innerHTML = `
-                    <span>Bot is typing</span>
-                    <div class="dots">
-                        <div class="dot"></div>
-                        <div class="dot"></div>
-                        <div class="dot"></div>
-                    </div>
-                `;
-                messages.appendChild(botResponse);
-                botResponse.scrollIntoView({behavior: "smooth"});
-            }
-    
-            socket.on('message', function(msg) {
-                // Remove the bot response animation
-                var botResponseAnimation = document.querySelector('.bot-response');
-                if (botResponseAnimation) {
-                    botResponseAnimation.remove();
-                }
-    
-                var message = document.createElement('li');
-                message.className = 'bot-message';
-                message.innerHTML = `
-                    <div class="bot-message-container">
-                        <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Bot Avatar" class="bot-avatar">
-                        <div>
-                            <div class="message-content">
-                                <span>${msg}</span>
-                            </div>
-                            <div class="feedback">
-                                <i class="fas fa-thumbs-up"></i>
-                                <i class="fas fa-thumbs-down"></i>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                messages.appendChild(message);
-                message.scrollIntoView({behavior: "smooth"});
-                
-                // Retrieve and display URLs for the last user message
-                retrieveAndDisplayUrls(input.value);
-            });
-    
-            function appendUserMessage(msg) {
-                var message = document.createElement('li');
-                message.className = 'user-message';
-                message.innerHTML = `
-                    <div class="message-content">
-                        <span>${msg}</span>
-                    </div>
-                `;
-                messages.appendChild(message);
-                message.scrollIntoView({behavior: "smooth"});
+            // Remove the # symbols and any leading space
+            line = line.substring(headerLevel).trim();
+            
+            // Handle any inline formatting in the former header
+            const processedText = processInlineMarkdown(line);
+            
+            // Output as a regular paragraph
+            if (inList) {
+              // Close the list if we were in one
+              htmlOutput.push(`</${listType}>`);
+              inList = false;
             }
             
-            // Function to retrieve and display URLs
-            function retrieveAndDisplayUrls(question) {
-                $.ajax({
-                    type: 'POST',
-                    url: '/retrieve_urls',
-                    data: { 'question': question },
-                    success: function(response) {
-                        if (response.urls && response.urls.length > 0) {
-                            var urlsHtml = '<div class="sources-container"><h5>Sources:</h5><ul>';
-                            response.urls.forEach(function(url) {
-                                urlsHtml += '<li><a href="' + url + '" target="_blank">' + url + '</a></li>';
-                            });
-                            urlsHtml += '</ul></div>';
-                            
-                            // Append URLs to the last bot message
-                            var lastBotMessage = $('.bot-message').last();
-                            if (lastBotMessage.length) {
-                                lastBotMessage.find('.message-content').append(urlsHtml);
-                            }
-                        }
-                    },
-                    error: function(error) {
-                        console.error('Error retrieving URLs:', error);
-                    }
-                });
+            htmlOutput.push(`<p>${processedText}</p>`);
+            continue;
+          }
+          
+          // Handle list items
+          if (line.startsWith('* ') || line.startsWith('- ')) {
+            const itemText = line.substring(2);
+            
+            if (!inList) {
+              // Start a new list
+              inList = true;
+              listType = 'ul';
+              htmlOutput.push('<ul>');
+            } else if (listType !== 'ul') {
+              // Close the previous list and start a new one
+              htmlOutput.push(`</${listType}>`);
+              listType = 'ul';
+              htmlOutput.push('<ul>');
             }
-    
-            document.addEventListener('click', function(event) {
-                if (event.target.classList.contains('fa-thumbs-up') || event.target.classList.contains('fa-thumbs-down')) {
-                    var feedback = event.target.classList.contains('fa-thumbs-up') ? 'positive' : 'negative';
-                    event.target.classList.add('active');
-                    if (feedback === 'positive') {
-                        event.target.nextElementSibling.classList.remove('active');
-                    } else {
-                        event.target.previousElementSibling.classList.remove('active');
-                    }
-                    console.log('Feedback:', feedback); // Replace with actual feedback handling
-                }
-            });
-    
-            const howToUseBtn = document.querySelector('.how-to-use-btn');
-            const howToUse = document.querySelector('.how-to-use');
-            const closeBtn = document.querySelector('.close-btn');
-    
-            howToUseBtn.addEventListener('click', () => {
-                howToUse.style.display = 'block';
-            });
-    
-            closeBtn.addEventListener('click', () => {
-                howToUse.style.display = 'none';
-            });
-    
-            const newChatBtn = document.getElementById('new-chat');
-            newChatBtn.addEventListener('click', () => {
-                messages.innerHTML = '';
-                input.value = '';
-            });
+            
+            // Process inline markdown in list items (bold, links, etc.)
+            const processedItemText = processInlineMarkdown(itemText);
+            htmlOutput.push(`<li>${processedItemText}</li>`);
+            continue;
+          }
+          
+          // Handle numbered lists
+          if (/^\d+\.\s/.test(line)) {
+            const itemText = line.substring(line.indexOf(' ') + 1);
+            
+            if (!inList) {
+              // Start a new list
+              inList = true;
+              listType = 'ol';
+              htmlOutput.push('<ol>');
+            } else if (listType !== 'ol') {
+              // Close the previous list and start a new one
+              htmlOutput.push(`</${listType}>`);
+              listType = 'ol';
+              htmlOutput.push('<ol>');
+            }
+            
+            // Process inline markdown in list items (bold, links, etc.)
+            const processedItemText = processInlineMarkdown(itemText);
+            htmlOutput.push(`<li>${processedItemText}</li>`);
+            continue;
+          }
+          
+          // Default: treat as paragraph
+          if (inList) {
+            // Close the list if we were in one
+            htmlOutput.push(`</${listType}>`);
+            inList = false;
+            listItems = [];
+          }
+          
+          // Process inline markdown in paragraphs (bold, links, etc.)
+          const processedText = processInlineMarkdown(line);
+          htmlOutput.push(`<p>${processedText}</p>`);
+        }
+        
+        // Close any open lists
+        if (inList) {
+          htmlOutput.push(`</${listType}>`);
+        }
+        
+        const finalHtml = htmlOutput.join('\n');
+        console.log('Custom markdown parser output:', finalHtml);
+        
+        return finalHtml;
+      }
+      
+      // Helper function to process inline markdown elements
+      function processInlineMarkdown(text) {
+        // Keep colons attached to text (don't treat as special markdown)
+        
+        // Handle bold text with **text** or __text__
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        
+        // Handle italic text with *text* or _text_
+        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+        
+        // Handle links with [text](url)
+        text = text.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+        
+        // Handle code blocks with `code`
+        text = text.replace(/`(.*?)`/g, '<code>$1</code>');
+        
+        return text;
+      }
 
-            const urlIcon = document.getElementById('url-icon');
-            urlIcon.addEventListener('click', () => {
-                // Redirect to the search page
-                window.location.href = '/search';
-            });
-    
-            settingsIcon.addEventListener('click', () => {
-                settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
-            });
-    
-            darkModeToggle.addEventListener('change', () => {
-                document.body.classList.toggle('dark-mode');
-                // Save dark mode preference
-                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-            });
-    
-            // Close settings panel when clicking outside
-            document.addEventListener('click', function(event) {
-                if (!settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
-                    settingsPanel.style.display = 'none';
-                }
-            });
-    
-            // Close settings panel with close button
-            settingsCloseBtn.addEventListener('click', () => {
-                settingsPanel.style.display = 'none';
-            });
-    
-            // Font size change
-            fontSizeSelect.addEventListener('change', (event) => {
-                document.body.style.fontSize = event.target.value === 'small' ? '12px' :
-                                              event.target.value === 'medium' ? '16px' : '20px';
-                // Save font size preference
-                localStorage.setItem('fontSize', event.target.value);
-            });
+      // Connect to Socket.IO
+      var socket = io.connect('http://' + document.domain + ':' + location.port);
+      var form = document.getElementById('chat-form');
+      var input = document.getElementById('message');
+      var messages = document.getElementById('messages');
+      
+      // Settings elements
+      const settingsIcon = document.getElementById('settings-icon');
+      const settingsPanel = document.getElementById('settings-panel');
+      const settingsCloseBtn = document.getElementById('settings-close-btn');
+      const darkModeToggle = document.getElementById('darkModeToggle');
+      const fontSizeSelect = document.getElementById('fontSizeSelect');
+      
+      // Apply saved settings
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+        darkModeToggle.checked = true;
+      }
+      const savedFontSize = localStorage.getItem('fontSize') || 'medium';
+      document.body.style.fontSize = savedFontSize === 'small' ? '12px' :
+                                      savedFontSize === 'medium' ? '16px' : '20px';
+      if (fontSizeSelect) {
+        fontSizeSelect.value = savedFontSize;
+      }
+      
+      form.onsubmit = function(e) {
+        e.preventDefault();
+        appendUserMessage(input.value);
+        socket.send(input.value);
+        input.value = '';
+        showBotResponseAnimation();
+      };
+      
+      function showBotResponseAnimation() {
+        var botResponse = document.createElement('li');
+        botResponse.className = 'bot-message';
+        botResponse.innerHTML = `
+          <div class="bot-message-container">
+            <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Bot Avatar" class="bot-avatar">
+            <div class="message-content bot-response">
+              <div class="typing-indicator">
+                <div class="dots-container">
+                  <div class="dot"></div>
+                  <div class="dot"></div>
+                  <div class="dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        messages.appendChild(botResponse);
+        botResponse.scrollIntoView({behavior: "smooth"});
+      }
+      
+      socket.on('message', function(msg) {
+        // Remove the bot response animation if present
+        var botResponseAnimation = document.querySelector('.bot-message .bot-response');
+        if (botResponseAnimation) {
+          // Remove the entire bot message container
+          botResponseAnimation.closest('.bot-message').remove();
+        }
 
-            // Handle login form submission
-            $('#login-form').submit(function(e) {
-                e.preventDefault();
-                // Here you would normally send the login data to the server
-                // For now, we'll just close the modal and show an alert
-                $('#loginModal').modal('hide');
-                alert('Login functionality will be implemented soon!');
-            });
+        // Add console logging for debugging
+        console.log('Received message:', msg);
 
-            const homeIcon = document.getElementById('home-icon');
-            homeIcon.addEventListener('click', () => {
-                // Redirect to the landing page
-                window.location.href = '/';
-            });
+        // Convert the raw markdown response to HTML using our parseMarkdown function
+        var convertedMsg = parseMarkdown(msg);
+
+        var message = document.createElement('li');
+        message.className = 'bot-message';
+        message.innerHTML = `
+          <div class="bot-message-container">
+            <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Bot Avatar" class="bot-avatar">
+            <div>
+              <div class="message-content">
+                ${convertedMsg}
+              </div>
+              <div class="feedback">
+                <i class="fas fa-thumbs-up"></i>
+                <i class="fas fa-thumbs-down"></i>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        messages.appendChild(message);
+        message.scrollIntoView({behavior: "smooth"});
+        
+        // Retrieve and display URLs for the user question if applicable
+        retrieveAndDisplayUrls(input.value);
+      });
+      
+      socket.on('error', function(error) {
+        console.error('Socket error:', error);
+      });
+
+      socket.on('connect_error', function(error) {
+        console.error('Connection error:', error);
+      });
+      
+      function appendUserMessage(msg) {
+        // Function to escape HTML for security
+        function escapeHTML(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+        
+        var message = document.createElement('li');
+        message.className = 'user-message';
+        message.innerHTML = `
+          <div class="message-content">
+            <span>${escapeHTML(msg)}</span>
+          </div>
+        `;
+        messages.appendChild(message);
+        message.scrollIntoView({behavior: "smooth"});
+      }
+      
+      // Function to retrieve and display URLs
+      function retrieveAndDisplayUrls(question) {
+        $.ajax({
+          type: 'POST',
+          url: '/retrieve_urls',
+          data: { 'question': question },
+          success: function(response) {
+            if (response.urls && response.urls.length > 0) {
+              var urlsHtml = '<div class="sources-container"><h5>Sources:</h5><ul>';
+              response.urls.forEach(function(url) {
+                urlsHtml += '<li><a href="' + url + '" target="_blank">' + url + '</a></li>';
+              });
+              urlsHtml += '</ul></div>';
+              // Append URLs to the last bot message
+              var lastBotMessage = $('.bot-message').last();
+              if (lastBotMessage.length) {
+                lastBotMessage.find('.message-content').append(urlsHtml);
+              }
+            }
+          },
+          error: function(error) {
+            console.error('Error retrieving URLs:', error);
+          }
         });
-    </script>
+      }
+      
+      document.addEventListener('click', function(event) {
+        if (event.target.classList.contains('fa-thumbs-up') || event.target.classList.contains('fa-thumbs-down')) {
+          var feedback = event.target.classList.contains('fa-thumbs-up') ? 'positive' : 'negative';
+          event.target.classList.add('active');
+          if (feedback === 'positive') {
+            event.target.nextElementSibling.classList.remove('active');
+          } else {
+            event.target.previousElementSibling.classList.remove('active');
+          }
+          console.log('Feedback:', feedback);
+        }
+      });
+      
+      const howToUseBtn = document.querySelector('.how-to-use-btn');
+      const howToUse = document.querySelector('.how-to-use');
+      const closeBtn = document.querySelector('.close-btn');
+      
+      howToUseBtn.addEventListener('click', () => {
+        howToUse.style.display = 'block';
+      });
+      
+      closeBtn.addEventListener('click', () => {
+        howToUse.style.display = 'none';
+      });
+      
+      const newChatBtn = document.getElementById('new-chat');
+      newChatBtn.addEventListener('click', () => {
+        messages.innerHTML = '';
+        input.value = '';
+      });
+      
+      const urlIcon = document.getElementById('url-icon');
+      urlIcon.addEventListener('click', () => {
+        window.location.href = '/search';
+      });
+      
+      settingsIcon.addEventListener('click', () => {
+        settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+      });
+      
+      darkModeToggle.addEventListener('change', () => {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+      });
+      
+      document.addEventListener('click', function(event) {
+        if (!settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
+          settingsPanel.style.display = 'none';
+        }
+      });
+      
+      settingsCloseBtn.addEventListener('click', () => {
+        settingsPanel.style.display = 'none';
+      });
+      
+      fontSizeSelect.addEventListener('change', (event) => {
+        document.body.style.fontSize = event.target.value === 'small' ? '12px' :
+                                        event.target.value === 'medium' ? '16px' : '20px';
+        localStorage.setItem('fontSize', event.target.value);
+      });
+      
+      $('#login-form').submit(function(e) {
+        e.preventDefault();
+        $('#loginModal').modal('hide');
+        alert('Login functionality will be implemented soon!');
+      });
+      
+      const homeIcon = document.getElementById('home-icon');
+      homeIcon.addEventListener('click', () => {
+        window.location.href = '/';
+      });
+    });
+  </script>
 </body>
 </html>
