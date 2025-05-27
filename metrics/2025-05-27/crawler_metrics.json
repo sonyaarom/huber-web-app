@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-05-27T03:24:09.058424",
+  "total_runtime_seconds": 115.59346008300781,
+  "sitemap_processing_time_seconds": 15.105635404586792,
+  "database_update_time_seconds": 100.48724150657654,
+  "total_urls_found": 1021,
+  "new_urls": 1,
+  "updated_urls": 6,
+  "removed_urls": 14,
+  "unchanged_urls": 1014,
+  "errors": 0
+}
