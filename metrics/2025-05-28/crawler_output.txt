@@ -1,0 +1,17 @@
+Looking for .env file at: /home/runner/work/data-engineering-huber/data-engineering-huber/.venv
+File exists: False
+Settings loaded successfully!
+DB Host: aws-0-eu-central-1.pooler.supabase.com
+DB Port: 5432
+
+==================================================
+CRAWLER METRICS SUMMARY
+==================================================
+Total runtime: 1774.42 seconds
+Total URLs found: 1018
+New URLs: 1
+Updated URLs: 3
+Removed URLs: 18
+Unchanged URLs: 1014
+Errors: 0
+==================================================
