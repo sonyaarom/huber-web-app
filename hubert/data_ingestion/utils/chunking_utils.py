@@ -3,9 +3,9 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from typing import List
-
-from ..config import settings
-
+import pandas as pd
+import logging
+from src.config import settings
 
 OPENAI_API_KEY = settings.openai_api_key
 

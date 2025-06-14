@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
+import os
+import sys
 import logging
 import time
 import json
 from datetime import datetime
-from sqlalchemy import create_engine, MetaData, func, text
-from sqlalchemy.dialects.postgresql import insert
-from ..config import settings
-from .sitemap import process_sitemap
-from .content_extractor import content_extractor
+from typing import Dict, List
+
+import psycopg2
+import psycopg2.extras
+
+# Add the project root to the Python path to allow for absolute imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Now that the path is set, we can use absolute imports
+from hubert.data_ingestion.config import settings
+from hubert.data_ingestion.huber_crawler.sitemap import process_sitemap
+from hubert.data_ingestion.huber_crawler.content_extractor import content_extractor
+from hubert.data_ingestion.utils.db_utils import get_db_connection
 
 # Configure logging
 logging.basicConfig(
@@ -52,181 +64,112 @@ class CrawlerMetrics:
             json.dump(self.to_dict(), f, indent=2)
         logger.info(f"Metrics saved to {filename}")
 
-def insert_page_raw_records(records, metrics):
+def bulk_upsert_raw_pages(conn, records_to_upsert: List, metrics: CrawlerMetrics):
     """
-    Inserts or updates records in the existing page_raw table.
-    Pages missing from the new sitemap are marked as inactive (is_active = FALSE).
-    Now also tracks metrics and includes additional debugging.
+    Performs a bulk UPSERT to the page_raw table using psycopg2.extras.execute_values.
+    """
+    if not records_to_upsert:
+        logger.info("No records to upsert.")
+        return
+
+    upsert_query = """
+        INSERT INTO page_raw (uid, url, last_updated, last_scraped, is_active)
+        VALUES %s
+        ON CONFLICT (uid) DO UPDATE SET
+            url = EXCLUDED.url,
+            last_updated = EXCLUDED.last_updated,
+            last_scraped = EXCLUDED.last_scraped,
+            is_active = EXCLUDED.is_active;
+    """
+    
+    with conn.cursor() as cur:
+        try:
+            psycopg2.extras.execute_values(
+                cur,
+                upsert_query,
+                records_to_upsert,
+                page_size=500
+            )
+            # Track metrics based on the operation
+            # Note: A more complex approach would be needed to get exact new/updated counts
+            # from a bulk operation. This is a simplified metric tracking.
+            metrics.new_urls = cur.rowcount # This is an approximation
+            logger.info(f"Successfully bulk upserted {cur.rowcount} records into page_raw.")
+
+        except Exception as e:
+            logger.error(f"Error during bulk upsert of raw pages: {e}")
+            metrics.errors += len(records_to_upsert)
+            conn.rollback()
+            raise
+
+def process_page_raw_records(conn, records: Dict, metrics: CrawlerMetrics):
+    """
+    Prepares data for bulk insertion and marks old records as inactive.
     """
     start_time = time.time()
-
-    # Debug: Log the number of records to be processed
-    logger.info(f"Starting database update with {len(records)} records")
-    if records:
-        sample_id, sample_record = next(iter(records.items()))
-        logger.info(f"Sample record: ID={sample_id}, URL={sample_record['url']}, Last Updated={sample_record['last_updated']}")
-    else:
-        logger.error("No records to insert - records dictionary is empty!")
+    
+    if not records:
+        logger.warning("No records from sitemap to process!")
         return
-
-    db_url = (
-        f"postgresql://{settings.db_username}:{settings.db_password}"
-        f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
-    )
-    logger.info(f"Connecting to database: {settings.db_host}:{settings.db_port}/{settings.db_name}")
-
-    # Add timeout to prevent long-running connections
-    try:
-        engine = create_engine(db_url, connect_args={"connect_timeout": 10})
-        logger.info("Database engine created successfully")
-    except Exception as e:
-        logger.error(f"Failed to create database engine: {e}")
-        metrics.errors += 1
-        return
-
-    try:
-        metadata = MetaData()
-        metadata.reflect(bind=engine)
         
-        # Debug: Check if the page_raw table exists
-        if 'page_raw' not in metadata.tables:
-            logger.error("page_raw table doesn't exist in the database!")
-            metrics.errors += 1
-            return
-            
-        logger.info("Database metadata reflected successfully")
-        page_raw = metadata.tables['page_raw']
-    except Exception as e:
-        logger.error(f"Failed to reflect database metadata: {e}")
-        metrics.errors += 1
-        return
-
     new_ids = set(records.keys())
     metrics.total_urls_found = len(new_ids)
 
-    try:
-        with engine.begin() as conn:
-            # Test connection is working
-            try:
-                test_result = conn.execute(text("SELECT 1")).fetchone()
-                logger.info(f"Database connection test: {test_result}")
-            except Exception as e:
-                logger.error(f"Database connection test failed: {e}")
-                metrics.errors += 1
-                return
-                
-            # First, get existing records to track what's changed
-            try:
-                existing_query = text("SELECT id, url, last_updated, is_active FROM page_raw;")
-                existing_result = conn.execute(existing_query)
-                existing_records = {}
-                for row in existing_result:
-                    existing_records[row[0]] = {
-                        "url": row[1],
-                        "last_updated": row[2],
-                        "is_active": row[3]
-                    }
-                logger.info(f"Found {len(existing_records)} existing records in the database")
-            except Exception as e:
-                logger.error(f"Failed to query existing records: {e}")
-                metrics.errors += 1
-                existing_records = {}
+    # 1. Prepare the list of records for bulk upsert
+    records_to_upsert = []
+    now_timestamp = datetime.now()
+    for uid, record_data in records.items():
+        records_to_upsert.append((
+            uid,
+            record_data['url'],
+            record_data['last_updated'],
+            now_timestamp,
+            True # is_active
+        ))
+
+    # 2. Perform the bulk upsert
+    bulk_upsert_raw_pages(conn, records_to_upsert, metrics)
+
+    # 3. Mark pages no longer in the sitemap as inactive
+    with conn.cursor() as cur:
+        try:
+            # Create a temporary table to hold the new IDs
+            cur.execute("CREATE TEMPORARY TABLE temp_new_ids (id CHAR(32) PRIMARY KEY);")
+            psycopg2.extras.execute_values(cur, "INSERT INTO temp_new_ids (id) VALUES %s", [(uid,) for uid in new_ids])
+
+            # Update page_raw, setting is_active to FALSE for any IDs not in our temp table
+            update_inactive_query = """
+                UPDATE page_raw
+                SET is_active = FALSE
+                WHERE uid NOT IN (SELECT id FROM temp_new_ids);
+            """
+            cur.execute(update_inactive_query)
+            metrics.removed_urls = cur.rowcount
+            logger.info(f"Marked {cur.rowcount} old records as inactive.")
             
-            existing_ids = set(existing_records.keys())
-            metrics.removed_urls = len(existing_ids - new_ids)
-            
-            logger.info(f"Starting database inserts/updates: {len(new_ids)} records to process.")
-
-            # Count successful operations
-            successful_operations = 0
-
-            for record_id, record in records.items():
-                try:
-                    last_updated_dt = datetime.strptime(record['last_updated'], "%Y-%m-%d")
-                    last_scraped_dt = datetime.now()  # Removed UTC attribute for compatibility
-
-                    base_stmt = insert(page_raw).values(
-                        id=record_id,
-                        url=record['url'],
-                        last_updated=last_updated_dt,
-                        last_scraped=last_scraped_dt,
-                        is_active=True
-                    )
-
-                    stmt = base_stmt.on_conflict_do_update(
-                        index_elements=['id'],
-                        set_={
-                            'url': record['url'],
-                            'last_updated': func.greatest(page_raw.c.last_updated, base_stmt.excluded.last_updated),
-                            'last_scraped': last_scraped_dt,  # Add this to update the last_scraped time
-                            'is_active': True
-                        }
-                    )
-
-                    # Track changes for metrics
-                    if record_id not in existing_ids:
-                        metrics.new_urls += 1
-                    elif existing_records[record_id]["last_updated"] < last_updated_dt:
-                        metrics.updated_urls += 1
-                    else:
-                        metrics.unchanged_urls += 1
-
-                    start_query = time.time()
-                    result = conn.execute(stmt)
-                    end_query = time.time()
-                    
-                    successful_operations += 1
-                    
-                    if successful_operations % 100 == 0:
-                        logger.info(f"Processed {successful_operations} records so far")
-
-                except Exception as e:
-                    logger.error(f"Error updating record {record_id}: {e}")
-                    metrics.errors += 1
-
-            # Debug: Log the number of successful operations
-            logger.info(f"Successfully processed {successful_operations} out of {len(records)} records")
-
-            # Mark missing pages as inactive (only if there are existing records)
-            if existing_ids:
-                try:
-                    start_query = time.time()
-                    stmt_mark_inactive = page_raw.update().where(
-                        ~page_raw.c.id.in_(new_ids)
-                    ).values(is_active=False)
-
-                    result = conn.execute(stmt_mark_inactive)
-                    end_query = time.time()
-
-                    logger.info(f"Marked {result.rowcount} missing pages as inactive in {end_query - start_query:.4f} sec")
-
-                except Exception as e:
-                    logger.error(f"Error marking missing pages inactive: {e}")
-                    metrics.errors += 1
-            
-            logger.info("All database operations completed, transaction should commit")
-            
-    except Exception as e:
-        logger.error(f"Fatal database error: {e}")
-        metrics.errors += 1
-        return
-
+            # The temporary table is automatically dropped at the end of the session
+        except Exception as e:
+            logger.error(f"Error marking missing pages as inactive: {e}")
+            metrics.errors += 1
+            conn.rollback()
+            raise
+    
     metrics.database_update_time = time.time() - start_time
-    logger.info(f"Database update completed in {metrics.database_update_time:.2f} sec")
+    logger.info(f"Database update for page_raw completed in {metrics.database_update_time:.2f} sec")
 
 
 def main():
     """
     Main function to process the sitemap and update the database.
-    Now with metrics tracking and additional debugging.
+    Now with efficient bulk operations.
     """
     metrics = CrawlerMetrics()
     logger.info("🚀 Starting sitemap processing...")
     
-
     sitemap_start_time = time.time()
-    
+    records = {}
     try:
+        # Assuming settings are configured correctly
         records = process_sitemap(
             settings.url,
             settings.pattern,
@@ -235,52 +178,40 @@ def main():
             settings.include_patterns,
             settings.allowed_base_url
         )
-
         metrics.sitemap_processing_time = time.time() - sitemap_start_time
-        
-        if not records:
-            logger.error("No records returned from process_sitemap!")
-        else:
-            logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
-
+        logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
     except Exception as e:
-        logger.error(f"Error processing sitemap: {e}")
+        logger.error(f"Fatal error processing sitemap: {e}", exc_info=True)
         metrics.errors += 1
-        
-        # Save metrics even if we encounter errors
         metrics.save_to_file()
-        return
+        sys.exit(1)
 
-    if not records:
-        logger.info("⚠ No records to insert.")
-        metrics.save_to_file()
-        return
-
-    # Insert or update records in the database
-    insert_page_raw_records(records, metrics)
-
-    # Save the final metrics
-    metrics.save_to_file()
-
-    logger.info("Starting content extraction...")
+    # Use a single connection for all database operations in this run
     try:
-        content_extractor()
-        logger.info("Content extraction completed successfully")
-    except Exception as e:
-        logger.error(f"Error extracting content: {e}")
-        metrics.errors += 1
-        metrics.save_to_file()
+        with get_db_connection() as conn:
+            # Process page_raw records
+            process_page_raw_records(conn, records, metrics)
+            conn.commit()
 
-    # Print summary to standard output for GitHub Actions log
+            # Now, run the content extractor which will use the same connection pattern
+            logger.info("Starting content extraction...")
+            content_extractor()
+            logger.info("Content extraction completed successfully.")
+
+    except Exception as e:
+        logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
+        metrics.errors += 1
+    
+    # Save the final metrics and print summary
+    metrics.save_to_file()
     print("\n" + "="*50)
     print("CRAWLER METRICS SUMMARY")
     print("="*50)
     print(f"Total runtime: {metrics.to_dict()['total_runtime_seconds']:.2f} seconds")
     print(f"Total URLs found: {metrics.total_urls_found}")
-    print(f"New URLs: {metrics.new_urls}")
-    print(f"Updated URLs: {metrics.updated_urls}")
+    print(f"New URLs (approximated): {metrics.new_urls}")
+    print(f"Updated URLs: Not tracked in bulk mode")
     print(f"Removed URLs: {metrics.removed_urls}")
-    print(f"Unchanged URLs: {metrics.unchanged_urls}")
     print(f"Errors: {metrics.errors}")
     print("="*50)
 

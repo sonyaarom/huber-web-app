@@ -1,69 +1,123 @@
-import spacy
-from ..config import settings
+import os
+import sys
 import pandas as pd
-from sqlalchemy import create_engine, text
-
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
-from ..utils.text_utils import remove_extra_spaces, lemmatize_text
 
-def process_text(text):
-    text = remove_extra_spaces(text)
-    text = lemmatize_text(text)
-    text = text.lower()
-    return text
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Now that the path is set, we can use absolute imports
+from hubert.data_ingestion.utils.db_utils import get_db_connection
+from hubert.data_ingestion.utils.text_utils import remove_extra_spaces, lemmatize_text
+
+def process_text_for_keywords(text: str) -> str:
+    """
+    Processes the given text by lemmatizing, lowercasing, and removing extra spaces.
+    Handles None input gracefully.
+    """
+    if text is None:
+        return ""
+    # The spaCy model for lemmatization should be pre-loaded if possible,
+    # but for this script, we assume lemmatize_text handles it.
+    processed_text = lemmatize_text(text)
+    processed_text = remove_extra_spaces(processed_text)
+    return processed_text.lower()
+
+def get_records_to_process(conn):
+    """
+    Fetches records from page_content that need keyword processing.
+    This includes new pages or pages that have been updated more recently
+    than their corresponding keyword record.
+    """
+    query = """
+        SELECT pc.uid, pc.content
+        FROM page_content pc
+        LEFT JOIN page_keywords pk ON pc.uid = pk.uid
+        WHERE pk.uid IS NULL OR pc.last_updated > pk.last_scraped;
+    """
+    with conn.cursor() as cur:
+        cur.execute(query)
+        records = cur.fetchall()
+    print(f"Found {len(records)} records to process for keywords.")
+    return records
+
+def bulk_upsert_keywords(conn, data_to_upsert: list):
+    """
+    Performs a bulk UPSERT operation to the page_keywords table.
+
+    Args:
+        conn: The database connection object.
+        data_to_upsert: A list of tuples, where each tuple contains
+                        (uid, processed_text, raw_content, last_scraped_timestamp).
+    """
+    if not data_to_upsert:
+        print("No new data to upsert.")
+        return
+
+    # Note: The to_tsvector function is called within the query itself
+    upsert_query = """
+        INSERT INTO page_keywords (uid, content, tsvector, last_scraped)
+        VALUES %s
+        ON CONFLICT (uid) DO UPDATE SET
+            content = EXCLUDED.content,
+            tsvector = EXCLUDED.tsvector,
+            last_scraped = EXCLUDED.last_scraped;
+    """
+    with conn.cursor() as cur:
+        try:
+            # psycopg2.extras.execute_values is highly efficient for bulk operations
+            psycopg2.extras.execute_values(
+                cur,
+                upsert_query,
+                # The template ensures the tsvector function is applied correctly
+                # to the second value in each tuple.
+                [(item[0], item[1], psycopg2.extras.Json(None), item[2]) for item in data_to_upsert],
+                template='(%s, %s, to_tsvector(\'simple\', %s), %s)',
+                page_size=500  # Adjust page_size based on record size and memory
+            )
+            conn.commit()
+            print(f"Successfully bulk upserted {len(data_to_upsert)} records into page_keywords.")
+        except Exception as e:
+            print(f"An error occurred during bulk upsert: {e}")
+            conn.rollback()
+
 
 if __name__ == "__main__":
-    # Connect to the PostgreSQL database
-    db_url = (
-        f"postgresql://{settings.db_username}:{settings.db_password}"
-        f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
-    )
-    engine = create_engine(db_url)
+    print("Starting keyword processing job.")
+    
+    # It's good practice to wrap the main logic in a try/except block
+    try:
+        # Establish a single database connection for the entire job
+        with get_db_connection() as conn:
+            
+            # 1. Fetch all records that need processing
+            records = get_records_to_process(conn)
 
-    # Create the page_keywords table with tokenized_text as tsvector if it does not exist
-    create_table_query = text("""
-        CREATE TABLE IF NOT EXISTS page_keywords (
-            id CHAR(32) PRIMARY KEY,
-            url TEXT,
-            last_modified TIMESTAMP,
-            last_scraped TIMESTAMP,
-            tokenized_text tsvector,
-            raw_text TEXT
-        )
-    """)
-    
-    with engine.begin() as connection:
-        connection.execute(create_table_query)
-    
-    # Read the page_content table and limit to the first 5 rows
-    df = pd.read_sql_table('page_content', engine)
+            if not records:
+                print("No records require keyword processing. Exiting.")
+            else:
+                # 2. Process the records in memory
+                processed_data = []
+                now_timestamp = datetime.now()
+                for uid, raw_content in records:
+                    # Skip processing if content is empty
+                    if not raw_content:
+                        continue
+                    
+                    processed_text = process_text_for_keywords(raw_content)
+                    processed_data.append((uid, processed_text, now_timestamp))
 
-    print(df.head())
-    # Define the upsert SQL query for page_keywords table.
-    # Note: The tokenized_text is converted to a tsvector using to_tsvector in the VALUES clause.
+                # 3. Perform a single bulk write operation to the database
+                bulk_upsert_keywords(conn, processed_data)
 
-    upsert_query = text("""
-        INSERT INTO page_keywords (id, url, last_modified, last_scraped, tokenized_text, raw_text)
-        VALUES (:id, :url, :last_modified, :last_scraped, to_tsvector('simple', :tokenized_text), :raw_text)
-        ON CONFLICT (id) DO UPDATE
-        SET url = EXCLUDED.url,
-            last_modified = EXCLUDED.last_modified,
-            last_scraped = EXCLUDED.last_scraped,
-            tokenized_text = EXCLUDED.tokenized_text,
-            raw_text = EXCLUDED.raw_text
-    """)
-    
-    # Upsert the first 5 rows into page_keywords
-    with engine.begin() as connection:
-        for idx, row in df.iterrows():
-            tokenized_text = process_text(row['extracted_content'])
-            params = {
-                'id': row['id'],
-                'url': row['url'],
-                'last_modified': row['last_updated'],
-                'last_scraped': datetime.now(),
-                'tokenized_text': tokenized_text,
-                'raw_text': row['extracted_content']
-            }
-            connection.execute(upsert_query, params)
-    
+        print("Keyword processing job finished successfully.")
+
+    except Exception as e:
+        # Log the error for debugging
+        print(f"An error occurred in the keyword processing job: {e}")
+        # Exit with a non-zero status code to indicate failure,
+        # which can be picked up by orchestration tools like GitHub Actions.
+        sys.exit(1)

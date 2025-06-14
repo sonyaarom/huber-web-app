@@ -1,6 +1,7 @@
 import psycopg2
+from src.config import settings
+from psycopg2.extras import RealDictCursor
 import pandas as pd
-from ..config import settings
 
 # PostgreSQL Connection Function
 def get_pg_connection():

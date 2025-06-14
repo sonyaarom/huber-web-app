@@ -5,9 +5,10 @@ This module uses inheritance to reduce code duplication and a factory pattern
 to create the appropriate prompt type.
 """
 from src.generator.prompt_utils.prompt_builder import ReusableChatPromptBuilder, PromptComponent, PromptConfiguration
-from src.generator.prompt_utils.config import settings
+from src.config import settings
 import logging
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List, Union, Any
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,9 @@ def get_langfuse_client():
     """Get or create a Langfuse client singleton"""
     if not hasattr(get_langfuse_client, "client"):
         get_langfuse_client.client = Langfuse(
-            secret_key=settings.LANGFUSE_SECRET_KEY,
-            public_key=settings.LANGFUSE_PUBLIC_KEY,
-            host=settings.LANGFUSE_HOST
+            secret_key=settings.langfuse_secret_key,
+            public_key=settings.langfuse_public_key,
+            host=settings.langfuse_host
         )
     return get_langfuse_client.client
 

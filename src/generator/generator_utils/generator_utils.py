@@ -1,4 +1,4 @@
-from src.generator.prompt_utils.config import settings
+from src.config import settings
 from src.generator.prompt_utils.prompt_templates import PromptFactory
 import torch
 import time
@@ -11,8 +11,8 @@ from typing import Tuple, Optional, Any, Dict
 
 logger = logging.getLogger(__name__)
 
-RERANKER_MODEL = settings.RERANKER_MODEL
-EMBEDDING_MODEL = settings.EMBEDDING_MODEL  
+RERANKER_MODEL = settings.reranker_model
+EMBEDDING_MODEL = settings.embedding_model  
 
 
 
@@ -24,12 +24,12 @@ def initialize_models(model_type: str = "llama"):
     
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"Number of GPUs: {torch.cuda.device_count()}")
-    os.environ['CUDA_VISIBLE_DEVICES'] = settings.GPU_DEVICES
+    os.environ['CUDA_VISIBLE_DEVICES'] = settings.gpu_devices
 
     # Initialize embedding generator for OpenAI embeddings
     print("\nInitializing embedding generator...")
     embedding_generator = EmbeddingGenerator(
-        method=settings.EMBEDDING_PROVIDER,
+        method=settings.embedding_provider,
         model_name=EMBEDDING_MODEL,
         batch_size=8
     )
@@ -44,20 +44,20 @@ def initialize_models(model_type: str = "llama"):
         print("\nLoading LLM...")
         load_start = time.time()
         llm = Llama(
-            model_path=settings.MODEL_PATH,
-            n_gpu_layers=settings.N_GPU_LAYERS,
-            n_ctx=settings.CONTEXT_LENGTH,
-            n_batch=settings.N_BATCH,
+            model_path=settings.model_path,
+            n_gpu_layers=settings.n_gpu_layers,
+            n_ctx=settings.context_length,
+            n_batch=settings.n_batch,
             verbose=True,
-            use_mmap=settings.USE_MMAP,
-            use_mlock=settings.USE_MLOCK,
-            offload_kqv=settings.OFFLOAD_KQV,
-            seed=settings.SEED
+            use_mmap=settings.use_mmap,
+            use_mlock=settings.use_mlock,
+            offload_kqv=settings.offload_kqv,
+            seed=settings.seed
         )
         load_time = time.time() - load_start
         print(f"\nModel loading took {load_time:.2f} seconds ({load_time/60:.2f} minutes)")
     elif model_type == "openai":
-        llm = OpenAI(api_key=settings.OPENAI_API_KEY)
+        llm = OpenAI(api_key=settings.openai_api_key)
     else:
         raise ValueError(f"Invalid model type: {model_type}")
     

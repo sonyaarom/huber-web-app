@@ -31,3 +31,6 @@ flask_socketio
 langfuse
 together 
 sentence-transformers
+uvicorn
+fastapi
+psycopg2-binary

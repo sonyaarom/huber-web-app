@@ -3,10 +3,11 @@ from enum import Enum
 import logging
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from functools import lru_cache
+import os
 
-from .config import settings
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +15,9 @@ def get_langfuse_client():
     """Get the Langfuse client"""
     try:
         return Langfuse(
-            secret_key=settings.LANGFUSE_SECRET_KEY,
-            public_key=settings.LANGFUSE_PUBLIC_KEY,
-            host=settings.LANGFUSE_HOST
+            secret_key=settings.langfuse_secret_key,
+            public_key=settings.langfuse_public_key,
+            host=settings.langfuse_host
         )
     except Exception as e:
         logger.error(f"Failed to initialize Langfuse client: {e}")
@@ -36,7 +37,7 @@ class PromptComponent:
     content: str = ""
     required: bool = False
     separator_after: bool = False
-    
+
 class PromptStrategy(ABC):
     """Abstract base class for different prompt composition strategies"""
     @abstractmethod

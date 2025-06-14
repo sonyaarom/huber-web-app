@@ -6,9 +6,10 @@ import torch
 import numpy as np
 from .utils.text_processing import process_text
 from psycopg2.extensions import adapt
+from psycopg2.extras import RealDictCursor
 
 # Import local modules
-from .config import settings
+from src.config import settings
 from .utils.embeddings_utils import EmbeddingGenerator
 
 # Check if sentence-transformers is available for reranking
@@ -131,7 +132,12 @@ class HybridRetriever:
         start_time = time.time()
         
         # Generate embedding for the query
-        query_embedding = self.embedding_generator.generate_embeddings([query])[0]
+        query_embeddings = self.embedding_generator.generate_embeddings([query])
+        if not query_embeddings:
+            logger.warning(f"Could not generate embedding for query: '{query}'. Returning empty results.")
+            return []
+        
+        query_embedding = query_embeddings[0]
         
         # Convert embedding to PostgreSQL format
         if hasattr(query_embedding, 'tolist'):
@@ -210,53 +216,52 @@ class HybridRetriever:
             cursor.execute(bm25_query, (bm25_query_text, retrieval_limit * 2))
             bm25_results = cursor.fetchall()
             
-            # Get all IDs from vector results for mapping
-            vector_ids = [row[0] for row in vector_results]
-            
-            # Create dictionaries for easier lookup
-            vector_scores = {row[0]: row[2] for row in vector_results}
-            vector_contents = {row[0]: row[1] for row in vector_results}
+            # Create dictionaries for easier lookup. For vector results, we might have multiple chunks 
+            # per document, so we take the one with the best score (minimum distance).
+            vector_scores = {}
+            vector_contents = {}
+            for doc_id, chunk_text, distance in vector_results:
+                if doc_id not in vector_scores or distance < vector_scores[doc_id]:
+                    vector_scores[doc_id] = distance
+                    vector_contents[doc_id] = chunk_text
             
             # Create a mapping of BM25 scores by ID
-            bm25_scores = {}
+            bm25_scores = {row[0]: row[1] for row in bm25_results}
             
-            # For each BM25 result, find the corresponding document in our table
-            for bm25_row in bm25_results:
-                bm25_id = bm25_row[0]  # ID from page_keywords
-                bm25_score = bm25_row[1]  # Score from BM25
-                
-                # Check if this ID exists in our vector results
-                if bm25_id in vector_ids:
-                    bm25_scores[bm25_id] = bm25_score
+            # Get all unique document IDs from both searches
+            all_doc_ids = set(vector_scores.keys()) | set(bm25_scores.keys())
             
-            # Get all unique document IDs that have both vector and BM25 scores
-            all_doc_ids = set(vector_scores.keys()) & set(bm25_scores.keys())
-            
-            # If we don't have any overlap, fall back to vector search only
             if not all_doc_ids:
-                logger.warning(f"No overlap between BM25 and vector search results. Using vector search only.")
+                logger.warning("No results from vector or BM25 search. Falling back to vector results.")
                 doc_ids = [row[0] for row in vector_results]
                 scores = [row[2] for row in vector_results]
                 contents = [row[1] for row in vector_results]
             else:
-                logger.info(f"Found {len(all_doc_ids)} overlapping document IDs between BM25 and vector search results")
-                # Create combined scores
+                logger.info(f"Found {len(all_doc_ids)} unique document IDs from combining vector and BM25 search.")
+                
+                # Normalize scores and combine them
                 combined_scores = {}
+                max_bm25 = max(bm25_scores.values()) if bm25_scores else 1.0
+
                 for doc_id in all_doc_ids:
-                    # Get scores
-                    vector_score = vector_scores[doc_id]
-                    bm25_score = bm25_scores[doc_id]
+                    # Get vector similarity score
+                    vector_dist = vector_scores.get(doc_id)
+                    if vector_dist is not None:
+                        # Convert L2 distance to similarity score in [0, 1]
+                        # OpenAI embeddings are normalized, so L2 distance is in [0, 2]
+                        # sim = 1 - (dist^2 / 4)
+                        vector_sim = 1 - (vector_dist * vector_dist / 4.0)
+                    else:
+                        vector_sim = 0.0
+
+                    # Get BM25 score and normalize it
+                    bm25_score = bm25_scores.get(doc_id, 0.0)
+                    norm_bm25 = float(bm25_score) / max_bm25 if max_bm25 > 0 else 0.0
                     
-                    # Normalize BM25 score to [0, 1] range if we have any scores
-                    if bm25_scores:
-                        max_bm25 = max(bm25_scores.values())
-                        if max_bm25 > 0:
-                            bm25_score = bm25_score / max_bm25
-                    
-                    # Combine scores using alpha parameter
+                    # Combine scores
                     combined_scores[doc_id] = (
-                        self.hybrid_alpha * vector_score + 
-                        (1 - self.hybrid_alpha) * float(bm25_score)
+                        self.hybrid_alpha * vector_sim + 
+                        (1 - self.hybrid_alpha) * norm_bm25
                     )
                 
                 # Sort by combined score
@@ -266,7 +271,7 @@ class HybridRetriever:
                     reverse=True
                 )
                 
-                # Get top results
+                # Limit to retrieval limit
                 top_results = sorted_results[:retrieval_limit]
                 
                 # Get doc_ids, scores, and contents

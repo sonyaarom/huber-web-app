@@ -1,4 +1,4 @@
-from .config import settings
+from src.config import settings
 import openai
 import time
 import random
@@ -7,6 +7,8 @@ from tqdm import tqdm
 from openai import RateLimitError, AuthenticationError
 from logging import getLogger
 from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception_type
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
 logging = getLogger(__name__)

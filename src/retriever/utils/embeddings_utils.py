@@ -1,7 +1,8 @@
 import torch
 import os
 import logging
-from ..config import settings
+from sentence_transformers import SentenceTransformer
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +113,15 @@ class EmbeddingGenerator:
         embeddings = []
         for i in range(0, len(texts), self.batch_size):
             batch_texts = texts[i:i+self.batch_size]
+            
+            # Filter out empty or whitespace-only strings
+            cleaned_batch = [text.strip() for text in batch_texts if text and text.strip()]
+            if not cleaned_batch:
+                continue
+                
             try:
                 response = self.client.embeddings.create(
-                    input=batch_texts,
+                    input=cleaned_batch,
                     model=self.model_name
                 )
                 batch_embeddings = [item.embedding for item in response.data]

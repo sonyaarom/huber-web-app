@@ -1,10 +1,11 @@
 #qa_generate.py
 import re  
 import pandas as pd  
-from config import settings
+from src.config import settings
 from llama_cpp import Llama
 import pandas as pd  
 from db_utils import fetch_page_content
+import openai
 
 
 # Fetch data and sample 150 rows
@@ -111,3 +112,4 @@ if __name__ == "__main__":
     qa_df = pd.DataFrame(results)
     qa_df.to_csv("qa_pairs.csv", index=False)
     print("QA pairs saved to qa_pairs.csv")
+

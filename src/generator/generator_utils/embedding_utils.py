@@ -2,9 +2,10 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 from openai import OpenAI
 import os
-from src.generator.prompt_utils.config import settings
+from src.config import settings
 from logging import getLogger
 from tqdm import tqdm
+from sentence_transformers import SentenceTransformer
 
 logger = getLogger(__name__)
 
@@ -16,7 +17,7 @@ except ImportError:
     OPENAI_PACKAGE_AVAILABLE = False
 
 # Check if API key is available
-if not settings.OPENAI_API_KEY:
+if not settings.openai_api_key:
     OPENAI_API_KEY_AVAILABLE = False
 else:
     OPENAI_API_KEY_AVAILABLE = True
@@ -64,8 +65,8 @@ class EmbeddingGenerator:
             client_params = {}
             if api_key:
                 client_params["api_key"] = api_key
-            elif hasattr(settings, 'OPENAI_API_KEY') and settings.OPENAI_API_KEY:
-                client_params["api_key"] = settings.OPENAI_API_KEY
+            elif hasattr(settings, 'openai_api_key') and settings.openai_api_key:
+                client_params["api_key"] = settings.openai_api_key
             elif os.environ.get("OPENAI_API_KEY"):
                 pass  # Client will pick it up automatically
             else:
