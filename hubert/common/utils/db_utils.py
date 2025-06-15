@@ -2,16 +2,17 @@ import psycopg2
 import os
 from psycopg2.extras import RealDictCursor
 import pandas as pd
+from hubert.config import settings
 
 # PostgreSQL Connection Function
 def get_db_connection():
     """Establishes a connection to the PostgreSQL database using environment variables."""
     return psycopg2.connect(
-        dbname=os.environ.get("DB_NAME"),
-        user=os.environ.get("DB_USERNAME"),
-        password=os.environ.get("DB_PASSWORD"),
-        host=os.environ.get("DB_HOST"),
-        port=os.environ.get("DB_PORT", 5432)  # Default port for PostgreSQL
+        dbname=settings.db_name,
+        user=settings.db_username,
+        password=settings.db_password,
+        host=settings.db_host,
+        port=settings.db_port
     )
 
 # Fetch Data from page_content Table

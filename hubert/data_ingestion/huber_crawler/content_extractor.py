@@ -7,7 +7,7 @@ from typing import Optional, Dict, List, Tuple
 import requests
 import psycopg2
 import psycopg2.extras
-from bs4 import BeautifulSoup
+import trafilatura
 
 # Add the project root to the Python path to allow for absolute imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -15,7 +15,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Now that the path is set, we can use absolute imports
-from hubert.data_ingestion.utils.db_utils import get_db_connection
+from hubert.common.utils.db_utils import get_db_connection
 
 # Configure logging
 logging.basicConfig(
@@ -41,28 +41,36 @@ def get_html_content(url: str, timeout: int = 10) -> Optional[str]:
 
 def extract_info(html_content: str) -> Dict[str, str]:
     """
-    Extracts the title and main content from the given HTML.
+    Extracts the title and main content from the given HTML using trafilatura.
     """
     if not html_content:
         return {"title": "Title not found", "content": "Main content not found"}
     
-    soup = BeautifulSoup(html_content, 'html.parser')
+    # trafilatura's extract function returns the main text content.
+    # It can also extract metadata like title, but we'll get it from the main extract call for simplicity.
+    content_text = trafilatura.extract(html_content, include_comments=False, include_tables=False)
     
-    # Prioritize finding the most relevant title tag
-    title_tag = soup.find('h1') or soup.find('h2', class_='documentFirstHeading') or soup.find('title')
-    title_text = title_tag.get_text(strip=True) if title_tag else "Title not found"
+    # For the title, we can attempt to extract it separately if needed,
+    # or rely on a simpler method as trafilatura focuses on main content.
+    # A simple approach is to extract the <title> tag text.
+    # Note: This part is a simplification. For robust title extraction, 
+    # you might need a different approach or to parse the HTML again.
+    # For now, we will use a basic title extraction.
     
-    # Decompose irrelevant tags for cleaner content extraction
-    main_content = soup.find('main') or soup.find('article') or soup.body
-    if main_content:
-        for tag in main_content.find_all(["script", "style", "nav", "header", "footer"]):
-            tag.decompose()
-        
-        # Join stripped strings to get clean text content
-        content_text = ' '.join(main_content.stripped_strings)
-    else:
+    # A more direct way to get title with trafilatura is not straightforward from the main `extract` function.
+    # We will parse it manually or leave it as "Title not found" if content is extracted.
+    
+    title_text = "Title not found" # Placeholder
+    if content_text:
+        # Try to find title in the original HTML as a fallback
+        start_title = html_content.find('<title>')
+        end_title = html_content.find('</title>')
+        if start_title != -1 and end_title != -1:
+            title_text = html_content[start_title + len('<title>'):end_title].strip()
+
+    if not content_text:
         content_text = "Main content not found"
-    
+
     return {"title": title_text, "content": content_text}
 
 def get_records_to_process(conn) -> List[Tuple]:
@@ -72,10 +80,10 @@ def get_records_to_process(conn) -> List[Tuple]:
     than their corresponding content record.
     """
     query = """
-        SELECT pr.uid, pr.url, pr.last_updated
+        SELECT pr.id, pr.url, pr.last_updated
         FROM page_raw pr
-        LEFT JOIN page_content pc ON pr.uid = pc.uid
-        WHERE pr.is_active = TRUE AND (pc.uid IS NULL OR pr.last_updated > pc.last_scraped);
+        LEFT JOIN page_content pc ON pr.id = pc.id
+        WHERE pr.is_active = TRUE AND (pc.id IS NULL OR pr.last_updated > pc.last_scraped);
     """
     with conn.cursor() as cur:
         cur.execute(query)
@@ -92,9 +100,9 @@ def bulk_upsert_content(conn, data_to_upsert: list):
         return
 
     upsert_query = """
-        INSERT INTO page_content (uid, url, html_content, title, content, last_updated, is_active, last_scraped)
+        INSERT INTO page_content (id, url, html_content, title, content, last_updated, is_active, last_scraped)
         VALUES %s
-        ON CONFLICT (uid) DO UPDATE SET
+        ON CONFLICT (id) DO UPDATE SET
             url = EXCLUDED.url,
             html_content = EXCLUDED.html_content,
             title = EXCLUDED.title,
@@ -130,7 +138,7 @@ if __name__ == "__main__":
                 # 2. Process records in memory: Fetch HTML and extract content
                 processed_data = []
                 now_timestamp = datetime.now()
-                for uid, url, last_updated in records:
+                for id, url, last_updated in records:
                     logger.info(f"Processing URL: {url}")
                     html_content = get_html_content(url)
                     if not html_content:
@@ -138,13 +146,18 @@ if __name__ == "__main__":
                         continue
                     
                     extracted = extract_info(html_content)
+
+                    # Clean NUL characters which cause database errors
+                    clean_html = html_content.replace('\\x00', '')
+                    clean_title = extracted['title'].replace('\\x00', '')
+                    clean_content = extracted['content'].replace('\\x00', '') if extracted['content'] else ''
                     
                     processed_data.append((
-                        uid,
+                        id,
                         url,
-                        html_content,
-                        extracted['title'],
-                        extracted['content'],
+                        clean_html,
+                        clean_title,
+                        clean_content,
                         last_updated,
                         True, # is_active
                         now_timestamp
