@@ -62,7 +62,6 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          # --- FIX IS HERE ---
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
         run: |
@@ -78,7 +77,6 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          # --- AND FIX IS HERE ---
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
         run: |
@@ -133,3 +131,16 @@ jobs:
           git config --global user.email 'actions@github.com'
           git add metrics/
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update processor metrics [skip ci]" && git push)
+          
+      - name: Garbage Collection
+        # This step will always run to clean up stale data
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          echo "::group::Garbage Collection Log"
+          python scripts/garbage_collector.py
+          echo "::endgroup::"
