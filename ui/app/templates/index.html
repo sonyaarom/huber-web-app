@@ -1053,6 +1053,59 @@
         botResponse.scrollIntoView({behavior: "smooth"});
       }
       
+      socket.on('response', function(data) {
+        // Remove the bot response animation if present
+        var botResponseAnimation = document.querySelector('.bot-message .bot-response');
+        if (botResponseAnimation) {
+          // Remove the entire bot message container
+          botResponseAnimation.closest('.bot-message').remove();
+        }
+
+        // Add console logging for debugging
+        console.log('Received response:', data);
+
+        // Extract the answer from the response data
+        var msg = data.answer || data;
+        
+        // Convert the raw markdown response to HTML using our parseMarkdown function
+        var convertedMsg = parseMarkdown(msg);
+
+        var message = document.createElement('li');
+        message.className = 'bot-message';
+        message.innerHTML = `
+          <div class="bot-message-container">
+            <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="Bot Avatar" class="bot-avatar">
+            <div>
+              <div class="message-content">
+                ${convertedMsg}
+              </div>
+              <div class="feedback">
+                <i class="fas fa-thumbs-up"></i>
+                <i class="fas fa-thumbs-down"></i>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        messages.appendChild(message);
+        message.scrollIntoView({behavior: "smooth"});
+        
+        // Display URLs if they exist in the response data
+        if (data.urls && data.urls.length > 0) {
+          var urlsHtml = '<div class="sources-container"><h5>Sources:</h5><ul>';
+          data.urls.forEach(function(url) {
+            urlsHtml += '<li><a href="' + url + '" target="_blank">' + url + '</a></li>';
+          });
+          urlsHtml += '</ul></div>';
+          // Append URLs to the last bot message
+          var lastBotMessage = $('.bot-message').last();
+          if (lastBotMessage.length) {
+            lastBotMessage.find('.message-content').append(urlsHtml);
+          }
+        }
+      });
+      
+      // Fallback listener for plain message events
       socket.on('message', function(msg) {
         // Remove the bot response animation if present
         var botResponseAnimation = document.querySelector('.bot-message .bot-response');
@@ -1086,9 +1139,6 @@
         
         messages.appendChild(message);
         message.scrollIntoView({behavior: "smooth"});
-        
-        // Retrieve and display URLs for the user question if applicable
-        retrieveAndDisplayUrls(input.value);
       });
       
       socket.on('error', function(error) {
@@ -1116,32 +1166,6 @@
         `;
         messages.appendChild(message);
         message.scrollIntoView({behavior: "smooth"});
-      }
-      
-      // Function to retrieve and display URLs
-      function retrieveAndDisplayUrls(question) {
-        $.ajax({
-          type: 'POST',
-          url: '/retrieve_urls',
-          data: { 'question': question },
-          success: function(response) {
-            if (response.urls && response.urls.length > 0) {
-              var urlsHtml = '<div class="sources-container"><h5>Sources:</h5><ul>';
-              response.urls.forEach(function(url) {
-                urlsHtml += '<li><a href="' + url + '" target="_blank">' + url + '</a></li>';
-              });
-              urlsHtml += '</ul></div>';
-              // Append URLs to the last bot message
-              var lastBotMessage = $('.bot-message').last();
-              if (lastBotMessage.length) {
-                lastBotMessage.find('.message-content').append(urlsHtml);
-              }
-            }
-          },
-          error: function(error) {
-            console.error('Error retrieving URLs:', error);
-          }
-        });
       }
       
       document.addEventListener('click', function(event) {
@@ -1218,4 +1242,4 @@
     });
   </script>
 </body>
-</html>
+</html> 

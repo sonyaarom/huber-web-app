@@ -1,22 +1,22 @@
 # src/rag/llm.py
 from typing import Dict, List, Optional, Union, Any, Literal
-from ..workflows.utils.model_utils import initialise_llama, initialise_openai
-from ..workflows.retriever_workflow import HybridRetriever
+from hubert.prompt_evaluation.workflows.utils.model_utils import initialise_llama, initialise_openai
+from hubert.prompt_evaluation.workflows.retriever_workflow import HybridRetriever
 # Import the PromptFactory instead of specific prompt classes
-from ..prompts.prompt_templates import PromptFactory
+from hubert.prompt_evaluation.prompts.prompt_templates import PromptFactory
 import logging
 import time
-from ..config.settings import settings
+from hubert.config import settings
 
 logger = logging.getLogger(__name__)
 
 class RAGSystem:
     def __init__(
         self,
-        embedding_model_name: str = settings.EMBEDDING_MODEL,
-        reranker_model_name: str = settings.RERANKER_MODEL,
-        alpha: float = settings.BM25_ALPHA,
-        bm25_path: str = settings.BM25_VALUES,
+        embedding_model_name: str = settings.embedding_model,
+        reranker_model_name: str = settings.reranker_model,
+        alpha: float = settings.bm25_alpha,
+        bm25_path: str = settings.bm25_values,
         prompt_builder = None,  # Make this a generic type to avoid import
         prompt_type: str = None,  # New parameter to specify prompt type
         max_retries: int = 3,
@@ -57,8 +57,8 @@ class RAGSystem:
         if init_openai:
             try:
                 logger.info("Initializing OpenAI model...")
-                self.llm_openai = initialise_openai(api_key=settings.OPENAI_API_KEY)
-                self.openai_model = getattr(settings, 'OPENAI_MODEL', "gpt-3.5-turbo")
+                self.llm_openai = initialise_openai(api_key=settings.openai_api_key)
+                self.openai_model = getattr(settings, 'openai_model', "gpt-3.5-turbo")
                 logger.info("OpenAI model initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI model: {str(e)}")
@@ -72,7 +72,7 @@ class RAGSystem:
                 embedding_model_name=embedding_model_name,
                 reranker_model_name=reranker_model_name,
                 alpha=alpha,
-                bm25_path=bm25_path or settings.BM25_VALUES
+                bm25_path=bm25_path or settings.bm25_values
             )
             logger.info("Retriever initialized successfully")
         except Exception as e:
@@ -412,7 +412,7 @@ class RAGSystem:
 
 def main():
     # Import the PromptFactory instead of specific prompt types
-    from ..prompts.prompt_templates import PromptFactory
+    from hubert.prompt_evaluation.prompts.prompt_templates import PromptFactory
     
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('src.core.prompt_builder').setLevel(logging.DEBUG)  # Enable verbose logging

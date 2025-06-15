@@ -1,11 +1,11 @@
-from src.config import settings
-from src.generator.prompt_utils.prompt_templates import PromptFactory
+from hubert.config import settings
+from hubert.prompt_evaluation.prompts.prompt_templates import PromptFactory
 import torch
 import time
 import os
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
-from src.generator.generator_utils.embedding_utils import EmbeddingGenerator
+from hubert.common.utils.embedding_utils import EmbeddingGenerator
 import logging
 from typing import Tuple, Optional, Any, Dict
 
@@ -92,7 +92,6 @@ def generate_answer(
             
         return {
             "choices": [{"text": generated_text}],
-            "context": context,
             "prompt": prompt_text
         }
     
@@ -111,7 +110,7 @@ def generate_answer(
         
         return {
             "choices": [{"text": generated_text}],
-            #"prompt": prompt_text
+            "prompt": prompt_text
         }
     
     else:

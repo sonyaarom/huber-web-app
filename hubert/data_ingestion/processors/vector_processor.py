@@ -1,5 +1,5 @@
-from ..utils.embedding_utils import process_and_store_embeddings
-from hubert.data_ingestion.config import settings
+from hubert.data_ingestion.processors.embedding_processor import process_and_store_embeddings
+from hubert.config import settings
 import logging
 import os
 import sys

@@ -3,13 +3,12 @@
 # Combine with the prompt that we defined earlier, and then generate an answer using the LLM
 # Should save the results to a CSV file
 
-from src.evaluators.retriever import Retriever
-from src.config import settings
-from .config import settings as evaluator_settings
-from src.evaluators.generator_modules import initialize_models
-from src.evaluators.wandb_evaluation import run_evaluation
+from hubert.prompt_evaluation.evaluators.retriever import Retriever
+from hubert.config import settings
+from hubert.prompt_evaluation.evaluators.generator_modules import initialize_models
+from hubert.prompt_evaluation.evaluators.wandb_evaluation import run_evaluation
 
-EMBEDDING_MODEL = evaluator_settings.embedding_model
+EMBEDDING_MODEL = settings.embedding_model
 
 def main(
     csv_file: str = 'qa_pairs_filtered.csv',

@@ -1,6 +1,6 @@
 from .generator_utils.generator_utils import initialize_models, generate_answer
-from .prompt_utils.prompt_templates import PromptFactory
-from src.config import settings
+from hubert.prompt_evaluation.prompts.prompt_templates import PromptFactory
+from hubert.config import settings
 from together import Together
 import logging
 

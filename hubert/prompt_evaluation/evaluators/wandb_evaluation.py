@@ -8,17 +8,16 @@ from tqdm import tqdm
 import logging
 from typing import List, Dict, Any, Optional
 
-from src.evaluators.retriever import Retriever
-from src.config import settings
-from src.evaluators.config import settings as evaluator_settings
-from src.prompts.prompt_templates import PromptFactory
-from src.evaluators.evaluation_funcs import (
+from hubert.prompt_evaluation.evaluators.retriever import Retriever
+from hubert.config import settings
+from hubert.prompt_evaluation.prompts.prompt_templates import PromptFactory
+from hubert.prompt_evaluation.evaluators.evaluation_funcs import (
     calculate_cosine_similarity, 
     calculate_rouge_scores, 
     calculate_answer_quality,
     model as embedding_model
 )
-from src.evaluators.generator_modules import initialize_models
+from hubert.prompt_evaluation.evaluators.generator_modules import initialize_models
 
 # Configure logging
 logging.basicConfig(
@@ -193,7 +192,7 @@ def run_evaluation(
         use_hybrid_search=True, 
         hybrid_alpha=0.6,
         embedding_provider="openai",
-        embedding_model=evaluator_settings.embedding_model
+        embedding_model=settings.embedding_model
     )
     
     all_results = []

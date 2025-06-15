@@ -3,15 +3,15 @@ from rouge_score import rouge_scorer
 import numpy as np
 from openai import OpenAI
 from langfuse import Langfuse
-from src.config.settings import settings
+from hubert.config import settings
 
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 langfuse = Langfuse(
-    secret_key=settings.LANGFUSE_SECRET_KEY,
-    public_key=settings.LANGFUSE_PUBLIC_KEY,
-    host=settings.LANGFUSE_HOST)
+    secret_key=settings.langfuse_secret_key,
+    public_key=settings.langfuse_public_key,
+    host=settings.langfuse_host)
 
 
 def calculate_cosine_similarity(generated: str, ground_truth: str, model: SentenceTransformer) -> float:
@@ -67,7 +67,7 @@ def calculate_answer_quality(question: str, answer: str, ground_truth: str) -> f
         "overall_score": {"score": X, "explanation": "..."}
     } """
 
-    openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    openai_client = OpenAI(api_key=settings.openai_api_key)
 
     response = openai_client.chat.completions.create(
         model="o1-mini",  
@@ -79,3 +79,12 @@ def calculate_answer_quality(question: str, answer: str, ground_truth: str) -> f
     
     return response.choices[0].message.content
 
+if __name__ == "__main__":
+    # sentence1 = "The capital of France is Paris"
+    # sentence2 = "The capital of France is Paris"
+    # print(calculate_rouge_scores(sentence1, sentence2))
+    # print(calculate_cosine_similarity(sentence1, sentence2, model))
+    question = "What tower is in Paris?"
+    answer = "Eiffel Tower"
+    ground_truth = "France is a country in Europe. The capital of France is Paris. In Paris, there is a big tower called Eiffel Tower."
+    print(calculate_answer_quality(question, answer, ground_truth))

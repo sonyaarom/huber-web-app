@@ -17,8 +17,8 @@ except ImportError:
     logging.warning("sentence-transformers not installed. Reranking will not be available.")
 
 # Local modules (adjust relative imports as needed)
-from .config import settings
-from .embedding_utils import EmbeddingGenerator
+from hubert.config import settings
+from hubert.common.utils.embedding_utils import EmbeddingGenerator
 
 
 # Configure logging

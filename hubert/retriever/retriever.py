@@ -9,8 +9,8 @@ from psycopg2.extensions import adapt
 from psycopg2.extras import RealDictCursor
 
 # Import local modules
-from src.config import settings
-from .utils.embeddings_utils import EmbeddingGenerator
+from hubert.config import settings
+from hubert.common.utils.embedding_utils import EmbeddingGenerator
 
 # Check if sentence-transformers is available for reranking
 try:
@@ -97,8 +97,9 @@ class HybridRetriever:
             else:
                 try:
                     logger.info(f"Initializing reranker with model: {self.reranker_model}")
-                    self.reranker = CrossEncoder(self.reranker_model)
-                    logger.info("Reranker initialized successfully")
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    self.reranker = CrossEncoder(self.reranker_model, device=device)
+                    logger.info(f"Reranker initialized successfully on device: {device}")
                 except Exception as e:
                     logger.error(f"Failed to initialize reranker: {e}")
                     self.use_reranker = False
@@ -129,6 +130,10 @@ class HybridRetriever:
         Returns:
             List of dictionaries containing document information and similarity scores
         """
+        if not query or not query.strip():
+            logger.warning("Received an empty query. Returning empty results.")
+            return []
+            
         start_time = time.time()
         
         # Generate embedding for the query
@@ -256,7 +261,7 @@ class HybridRetriever:
 
                     # Get BM25 score and normalize it
                     bm25_score = bm25_scores.get(doc_id, 0.0)
-                    norm_bm25 = float(bm25_score) / max_bm25 if max_bm25 > 0 else 0.0
+                    norm_bm25 = float(bm25_score) / float(max_bm25) if max_bm25 > 0 else 0.0
                     
                     # Combine scores
                     combined_scores[doc_id] = (
@@ -416,13 +421,13 @@ class HybridRetriever:
                 torch.cuda.empty_cache()
 
 
-# def create_retriever(use_full_content: bool = False) -> HybridRetriever:
-#     """Factory function to create a retriever with default settings."""
-#     return HybridRetriever(use_full_content=use_full_content) 
+def create_retriever(use_full_content: bool = False) -> HybridRetriever:
+    """Factory function to create a retriever with default settings."""
+    return HybridRetriever(use_full_content=use_full_content) 
 
 
-# if __name__ == "__main__":
-#     retriever = create_retriever(use_full_content=False)
-#     results = retriever.retrieve("Stefan")
-#     print(results)
-#     retriever.cleanup()
+if __name__ == "__main__":
+    retriever = create_retriever(use_full_content=False)
+    results = retriever.retrieve("Stefan")
+    print(results)
+    retriever.cleanup()

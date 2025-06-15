@@ -10,8 +10,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Now that the path is set, we can use absolute imports
-from hubert.data_ingestion.utils.db_utils import get_db_connection
-from hubert.data_ingestion.utils.text_utils import remove_extra_spaces, lemmatize_text
+from hubert.common.utils.db_utils import get_db_connection
+from hubert.common.utils.text_utils import remove_extra_spaces, lemmatize_text
 
 def process_text_for_keywords(text: str) -> str:
     """

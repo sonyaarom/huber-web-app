@@ -4,8 +4,8 @@ Unified prompt templates module with base template class and specialized prompt 
 This module uses inheritance to reduce code duplication and a factory pattern
 to create the appropriate prompt type.
 """
-from src.core.prompt_builder import ReusableChatPromptBuilder, PromptComponent, PromptConfiguration
-from src.config.settings import settings
+from hubert.prompt_evaluation.core.prompt_builder import ReusableChatPromptBuilder, PromptComponent, PromptConfiguration
+from hubert.config import settings
 import logging
 from typing import Dict, Optional, List, Union
 
@@ -17,11 +17,17 @@ from langfuse import Langfuse
 def get_langfuse_client():
     """Get or create a Langfuse client singleton"""
     if not hasattr(get_langfuse_client, "client"):
-        get_langfuse_client.client = Langfuse(
-            secret_key=settings.LANGFUSE_SECRET_KEY,
-            public_key=settings.LANGFUSE_PUBLIC_KEY,
-            host=settings.LANGFUSE_HOST
-        )
+        try:
+            # Attempt to initialize Langfuse
+            get_langfuse_client.client = Langfuse(
+                secret_key=settings.langfuse_secret_key,
+                public_key=settings.langfuse_public_key,
+                host=settings.langfuse_host
+            )
+            logger.info("Langfuse client initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Langfuse client: {e}")
+            get_langfuse_client.client = None
     return get_langfuse_client.client
 
 
