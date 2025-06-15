@@ -22,7 +22,7 @@ except ImportError:
 
 # Import local modules
 from .config import settings
-from .utils.embeddings_utils import EmbeddingGenerator
+from hubert.common.utils.embedding_utils import EmbeddingGenerator
 from .utils.metrics import calculate_mrr, calculate_hit_at_k
 
 # Configure logging

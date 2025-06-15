@@ -28,16 +28,15 @@
 #     pass
 
 
-import sys
 import os
+import sys
+from ui.app import create_app, socketio
 
-# Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+# Ensure the root directory is in the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import and run the app
-from ui.app import app, socketio
+app = create_app()
 
 if __name__ == '__main__':
-    # Use PORT environment variable if available (for Render deployment)
-    port = int(os.environ.get("PORT", 1234))
+    port = int(os.environ.get('PORT', 1234))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

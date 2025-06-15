@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - HUBer</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f4; }
+        .container { max-width: 400px; margin: 100px auto; padding: 2em; background-color: white; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; }
+        .form-group { margin-bottom: 1em; }
+        label { display: block; margin-bottom: 0.5em; font-weight: bold; }
+        input { width: 100%; padding: 0.5em; box-sizing: border-box; }
+        .btn { width: 100%; padding: 0.75em 1.5em; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
+        .alert { padding: 1em; margin-bottom: 1em; border-radius: 5px; }
+        .alert-danger { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Login</h1>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+    </div>
+</body>
+</html> 
