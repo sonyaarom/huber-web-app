@@ -51,7 +51,7 @@ def bulk_upsert_keywords(conn, data_to_upsert: list):
     Args:
         conn: The database connection object.
         data_to_upsert: A list of tuples, where each tuple contains
-                        (uid, processed_text, raw_content, last_scraped_timestamp).
+                        (uid, processed_text, last_scraped_timestamp).
     """
     if not data_to_upsert:
         print("No new data to upsert.")
@@ -63,7 +63,7 @@ def bulk_upsert_keywords(conn, data_to_upsert: list):
         VALUES %s
         ON CONFLICT (uid) DO UPDATE SET
             content = EXCLUDED.content,
-            tsvector = EXCLUDED.tsvector,
+            tsvector = to_tsvector('simple', EXCLUDED.content),
             last_scraped = EXCLUDED.last_scraped;
     """
     with conn.cursor() as cur:
@@ -74,8 +74,8 @@ def bulk_upsert_keywords(conn, data_to_upsert: list):
                 upsert_query,
                 # The template ensures the tsvector function is applied correctly
                 # to the second value in each tuple.
-                [(item[0], item[1], psycopg2.extras.Json(None), item[2]) for item in data_to_upsert],
-                template='(%s, %s, to_tsvector(\'simple\', %s), %s)',
+                [(item[0], item[1], item[2]) for item in data_to_upsert],
+                template='(%s, %s, %s)',
                 page_size=500  # Adjust page_size based on record size and memory
             )
             conn.commit()

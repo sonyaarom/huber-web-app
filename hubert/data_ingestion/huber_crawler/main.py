@@ -18,7 +18,7 @@ if project_root not in sys.path:
 # Now that the path is set, we can use absolute imports
 from hubert.data_ingestion.config import settings
 from hubert.data_ingestion.huber_crawler.sitemap import process_sitemap
-from hubert.data_ingestion.huber_crawler.content_extractor import content_extractor
+from hubert.data_ingestion.huber_crawler.content_extractor import get_records_to_process as get_content_records, bulk_upsert_content, get_html_content, extract_info
 from hubert.data_ingestion.utils.db_utils import get_db_connection
 
 # Configure logging
@@ -157,6 +157,49 @@ def process_page_raw_records(conn, records: Dict, metrics: CrawlerMetrics):
     metrics.database_update_time = time.time() - start_time
     logger.info(f"Database update for page_raw completed in {metrics.database_update_time:.2f} sec")
 
+def content_extractor(conn, metrics: CrawlerMetrics):
+    """
+    Fetches, extracts, and stores content for pages that need updating.
+    """
+    logger.info("Starting content extraction...")
+    extraction_start_time = time.time()
+    
+    try:
+        # 1. Fetch all records that need processing
+        records = get_content_records(conn)
+        
+        if not records:
+            logger.info("No records require content extraction.")
+            return
+
+        # 2. Process records in memory
+        processed_data = []
+        now_timestamp = datetime.now()
+        for uid, url, last_updated in records:
+            html_content = get_html_content(url)
+            if not html_content:
+                logger.warning(f"Skipping URL due to fetch failure: {url}")
+                metrics.errors += 1
+                continue
+            
+            extracted = extract_info(html_content)
+            processed_data.append((
+                uid, url, html_content,
+                extracted['title'], extracted['content'],
+                last_updated, True, now_timestamp
+            ))
+        
+        # 3. Perform a single bulk write operation
+        bulk_upsert_content(conn, processed_data)
+        
+    except Exception as e:
+        logger.error(f"An error occurred during content extraction: {e}", exc_info=True)
+        metrics.errors += 1
+        raise # Re-raise to be caught by the main exception handler
+        
+    finally:
+        extraction_time = time.time() - extraction_start_time
+        logger.info(f"Content extraction finished in {extraction_time:.2f} seconds.")
 
 def main():
     """
@@ -194,8 +237,8 @@ def main():
             conn.commit()
 
             # Now, run the content extractor which will use the same connection pattern
-            logger.info("Starting content extraction...")
-            content_extractor()
+            content_extractor(conn, metrics)
+            conn.commit()
             logger.info("Content extraction completed successfully.")
 
     except Exception as e:
