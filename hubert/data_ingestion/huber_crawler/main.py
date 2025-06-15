@@ -16,10 +16,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Now that the path is set, we can use absolute imports
-from hubert.data_ingestion.config import settings
+from hubert.config import settings
 from hubert.data_ingestion.huber_crawler.sitemap import process_sitemap
-from hubert.data_ingestion.huber_crawler.content_extractor import get_records_to_process as get_content_records, bulk_upsert_content, get_html_content, extract_info
-from hubert.data_ingestion.utils.db_utils import get_db_connection
+from hubert.db.postgres_storage import PostgresStorage
 
 # Configure logging
 logging.basicConfig(
@@ -64,147 +63,66 @@ class CrawlerMetrics:
             json.dump(self.to_dict(), f, indent=2)
         logger.info(f"Metrics saved to {filename}")
 
-def bulk_upsert_raw_pages(conn, records_to_upsert: List, metrics: CrawlerMetrics):
-    """
-    Performs a bulk UPSERT to the page_raw table using psycopg2.extras.execute_values.
-    """
-    if not records_to_upsert:
-        logger.info("No records to upsert.")
-        return
-
-    upsert_query = """
-        INSERT INTO page_raw (uid, url, last_updated, last_scraped, is_active)
-        VALUES %s
-        ON CONFLICT (uid) DO UPDATE SET
-            url = EXCLUDED.url,
-            last_updated = EXCLUDED.last_updated,
-            last_scraped = EXCLUDED.last_scraped,
-            is_active = EXCLUDED.is_active;
-    """
-    
-    with conn.cursor() as cur:
-        try:
-            psycopg2.extras.execute_values(
-                cur,
-                upsert_query,
-                records_to_upsert,
-                page_size=500
-            )
-            # Track metrics based on the operation
-            # Note: A more complex approach would be needed to get exact new/updated counts
-            # from a bulk operation. This is a simplified metric tracking.
-            metrics.new_urls = cur.rowcount # This is an approximation
-            logger.info(f"Successfully bulk upserted {cur.rowcount} records into page_raw.")
-
-        except Exception as e:
-            logger.error(f"Error during bulk upsert of raw pages: {e}")
-            metrics.errors += len(records_to_upsert)
-            conn.rollback()
-            raise
-
-def process_page_raw_records(conn, records: Dict, metrics: CrawlerMetrics):
+def process_page_raw_records(storage: PostgresStorage, records: Dict, metrics: CrawlerMetrics) -> List[str]:
     """
     Prepares data for bulk insertion and marks old records as inactive.
+    
+    Returns:
+        List of UIDs that were deactivated
     """
     start_time = time.time()
     
     if not records:
         logger.warning("No records from sitemap to process!")
-        return
+        return []
         
-    new_ids = set(records.keys())
-    metrics.total_urls_found = len(new_ids)
+    current_uids = list(records.keys())
+    metrics.total_urls_found = len(current_uids)
 
     # 1. Prepare the list of records for bulk upsert
     records_to_upsert = []
     now_timestamp = datetime.now()
     for uid, record_data in records.items():
-        records_to_upsert.append((
-            uid,
-            record_data['url'],
-            record_data['last_updated'],
-            now_timestamp,
-            True # is_active
-        ))
+        records_to_upsert.append({
+            'uid': uid,
+            'url': record_data['url'],
+            'last_updated': record_data['last_updated'],
+        })
 
-    # 2. Perform the bulk upsert
-    bulk_upsert_raw_pages(conn, records_to_upsert, metrics)
+    # 2. Perform the bulk upsert using the storage layer
+    try:
+        storage.upsert_raw_pages(records_to_upsert)
+        # Note: We can't easily get the number of new vs. updated from the storage layer
+        # without a more complex return value. This is a simplification.
+        logger.info(f"Successfully bulk upserted {len(records_to_upsert)} records into page_raw.")
+    except Exception as e:
+        logger.error(f"Error during bulk upsert of raw pages: {e}")
+        metrics.errors += len(records_to_upsert)
+        raise
 
-    # 3. Mark pages no longer in the sitemap as inactive
-    with conn.cursor() as cur:
-        try:
-            # Create a temporary table to hold the new IDs
-            cur.execute("CREATE TEMPORARY TABLE temp_new_ids (id CHAR(32) PRIMARY KEY);")
-            psycopg2.extras.execute_values(cur, "INSERT INTO temp_new_ids (id) VALUES %s", [(uid,) for uid in new_ids])
-
-            # Update page_raw, setting is_active to FALSE for any IDs not in our temp table
-            update_inactive_query = """
-                UPDATE page_raw
-                SET is_active = FALSE
-                WHERE uid NOT IN (SELECT id FROM temp_new_ids);
-            """
-            cur.execute(update_inactive_query)
-            metrics.removed_urls = cur.rowcount
-            logger.info(f"Marked {cur.rowcount} old records as inactive.")
-            
-            # The temporary table is automatically dropped at the end of the session
-        except Exception as e:
-            logger.error(f"Error marking missing pages as inactive: {e}")
-            metrics.errors += 1
-            conn.rollback()
-            raise
+    # 3. Mark pages no longer in the sitemap as inactive and get the deactivated UIDs
+    deactivated_uids = []
+    try:
+        deactivated_uids = storage.deactivate_old_urls(current_uids)
+        metrics.removed_urls = len(deactivated_uids)
+        if deactivated_uids:
+            logger.info(f"Deactivated {len(deactivated_uids)} URLs no longer present in the sitemap.")
+        else:
+            logger.info("No URLs needed to be deactivated.")
+    except Exception as e:
+        logger.error(f"Error marking missing pages as inactive: {e}")
+        metrics.errors += 1
+        raise
     
     metrics.database_update_time = time.time() - start_time
     logger.info(f"Database update for page_raw completed in {metrics.database_update_time:.2f} sec")
-
-def content_extractor(conn, metrics: CrawlerMetrics):
-    """
-    Fetches, extracts, and stores content for pages that need updating.
-    """
-    logger.info("Starting content extraction...")
-    extraction_start_time = time.time()
     
-    try:
-        # 1. Fetch all records that need processing
-        records = get_content_records(conn)
-        
-        if not records:
-            logger.info("No records require content extraction.")
-            return
-
-        # 2. Process records in memory
-        processed_data = []
-        now_timestamp = datetime.now()
-        for uid, url, last_updated in records:
-            html_content = get_html_content(url)
-            if not html_content:
-                logger.warning(f"Skipping URL due to fetch failure: {url}")
-                metrics.errors += 1
-                continue
-            
-            extracted = extract_info(html_content)
-            processed_data.append((
-                uid, url, html_content,
-                extracted['title'], extracted['content'],
-                last_updated, True, now_timestamp
-            ))
-        
-        # 3. Perform a single bulk write operation
-        bulk_upsert_content(conn, processed_data)
-        
-    except Exception as e:
-        logger.error(f"An error occurred during content extraction: {e}", exc_info=True)
-        metrics.errors += 1
-        raise # Re-raise to be caught by the main exception handler
-        
-    finally:
-        extraction_time = time.time() - extraction_start_time
-        logger.info(f"Content extraction finished in {extraction_time:.2f} seconds.")
+    return deactivated_uids
 
 def main():
     """
     Main function to process the sitemap and update the database.
-    Now with efficient bulk operations.
+    Now using the abstract storage layer.
     """
     metrics = CrawlerMetrics()
     logger.info("🚀 Starting sitemap processing...")
@@ -212,7 +130,6 @@ def main():
     sitemap_start_time = time.time()
     records = {}
     try:
-        # Assuming settings are configured correctly
         records = process_sitemap(
             settings.url,
             settings.pattern,
@@ -229,34 +146,37 @@ def main():
         metrics.save_to_file()
         sys.exit(1)
 
-    # Use a single connection for all database operations in this run
+    storage = PostgresStorage()
     try:
-        with get_db_connection() as conn:
-            # Process page_raw records
-            process_page_raw_records(conn, records, metrics)
-            conn.commit()
-
-            # Now, run the content extractor which will use the same connection pattern
-            content_extractor(conn, metrics)
-            conn.commit()
-            logger.info("Content extraction completed successfully.")
-
+        deactivated_uids = process_page_raw_records(storage, records, metrics)
+        
+        # Immediately purge the deactivated records from all related tables
+        if deactivated_uids:
+            logger.info(f"Starting immediate garbage collection for {len(deactivated_uids)} deactivated UIDs...")
+            purge_start_time = time.time()
+            try:
+                total_deleted = storage.purge_specific_inactive_records(deactivated_uids)
+                purge_time = time.time() - purge_start_time
+                logger.info(f"Garbage collection completed in {purge_time:.2f} sec. Total records deleted: {total_deleted}")
+                # Add purge metrics if desired
+                # metrics.purge_time = purge_time
+                # metrics.records_purged = total_deleted
+            except Exception as e:
+                logger.error(f"Error during immediate garbage collection: {e}", exc_info=True)
+                metrics.errors += 1
+        else:
+            logger.info("No records to purge - skipping garbage collection.")
+            
     except Exception as e:
         logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
         metrics.errors += 1
+    finally:
+        storage.close()
     
-    # Save the final metrics and print summary
     metrics.save_to_file()
     print("\n" + "="*50)
-    print("CRAWLER METRICS SUMMARY")
-    print("="*50)
-    print(f"Total runtime: {metrics.to_dict()['total_runtime_seconds']:.2f} seconds")
-    print(f"Total URLs found: {metrics.total_urls_found}")
-    print(f"New URLs (approximated): {metrics.new_urls}")
-    print(f"Updated URLs: Not tracked in bulk mode")
-    print(f"Removed URLs: {metrics.removed_urls}")
-    print(f"Errors: {metrics.errors}")
-    print("="*50)
+    logger.info(f"Crawler run finished in {time.time() - metrics.start_time:.2f} seconds.")
+    print("="*50 + "\n")
 
 if __name__ == "__main__":
     main()

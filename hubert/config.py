@@ -111,3 +111,11 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 settings = Settings() 
+
+DB_PARAMS = {
+    "host": settings.db_host,
+    "port": settings.db_port,
+    "dbname": settings.db_name,
+    "user": settings.db_username,
+    "password": settings.db_password,
+} 

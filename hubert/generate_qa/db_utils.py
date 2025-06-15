@@ -1,6 +1,6 @@
 import psycopg2
 import pandas as pd
-from src.config import settings
+from hubert.config import settings
 from psycopg2.extras import RealDictCursor
 
 # PostgreSQL Connection Function

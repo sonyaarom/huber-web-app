@@ -34,3 +34,5 @@ sentence-transformers
 uvicorn
 fastapi
 psycopg2-binary
+alembic
+pgvector

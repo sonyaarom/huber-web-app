@@ -1,81 +1,75 @@
-import psycopg2
-import os
+# scripts/data_check.py
+
 import json
-from datetime import datetime, timedelta
+import os
+import pandas as pd
+from sqlalchemy import create_engine, text
+from hubert.config import settings
 
-# Database connection parameters
-db_config = {
-    "dbname": os.environ["DB_NAME"],
-    "user": os.environ["DB_USERNAME"],
-    "password": os.environ["DB_PASSWORD"],
-    "host": os.environ["DB_HOST"],
-    "port": os.environ["DB_PORT"]
-}
+def check_for_updates():
+    """
+    Checks for new or updated content in `page_content` that needs processing.
+    The check is based on missing records or mismatched content hashes.
+    """
+    db_uri = settings.DATABASE_URL
+    engine = create_engine(db_uri)
 
-def check_for_new_data(hours_back=24):
-    """Check if there are new or updated records in the last hours_back hours"""
-    try:
-        # Connect to the database
-        with psycopg2.connect(**db_config) as conn:
-            with conn.cursor() as cursor:
-                # Get timestamp for comparison
-                time_threshold = datetime.now() - timedelta(hours=hours_back)
-                
-                # Check for new or updated records in page_raw
-                cursor.execute("""
-                    SELECT COUNT(*) FROM page_raw 
-                    WHERE last_scraped > %s AND is_active = TRUE
-                """, (time_threshold,))
-                raw_count = cursor.fetchone()[0]
-                
-                # Check for new or updated records in page_content that are not in page_keywords
-                cursor.execute("""
-                    SELECT COUNT(*) FROM page_content pc
-                    LEFT JOIN page_keywords pk ON pc.id = pk.id
-                    WHERE pc.last_scraped > %s 
-                    AND pc.is_active = TRUE 
-                    AND (pk.id IS NULL OR pc.last_updated > pk.last_modified)
-                """, (time_threshold,))
-                keywords_needed = cursor.fetchone()[0]
-                
-                # Check for new or updated records in page_content that are not in page_embeddings_a
-                cursor.execute("""
-                    SELECT COUNT(*) FROM page_content pc
-                    LEFT JOIN (
-                        SELECT DISTINCT id FROM page_embeddings_a
-                    ) pe ON pc.id = pe.id
-                    WHERE pc.last_scraped > %s 
-                    AND pc.is_active = TRUE 
-                    AND (pe.id IS NULL)
-                """, (time_threshold,))
-                embeddings_needed = cursor.fetchone()[0]
-                
-                # Return results
-                return {
-                    "new_or_updated_raw": raw_count,
-                    "keywords_needed": keywords_needed,
-                    "embeddings_needed": embeddings_needed,
-                    "processing_needed": keywords_needed > 0 or embeddings_needed > 0
-                }
-    except Exception as e:
-        print(f"Error checking for new data: {e}")
-        # Default to processing needed in case of error
-        return {
-            "error": str(e),
-            "processing_needed": True
-        }
+    # --- Corrected Query Logic ---
 
-# Run the check function and output results
-results = check_for_new_data()
-print(f"Check results: {results}")
+    # Query for keyword processing.
+    # Finds UIDs that are not in page_keywords OR where the content hash has changed.
+    keyword_query = text("""
+        SELECT pc.uid
+        FROM page_content pc
+        LEFT JOIN page_keywords pk ON pc.uid = pk.uid
+        WHERE pc.is_active = TRUE
+        AND (pk.uid IS NULL OR md5(pc.extracted_content) != pk.content_hash);
+    """)
 
-# Set GitHub output variable
-if 'GITHUB_OUTPUT' in os.environ:
-    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-        f.write(f"processing_needed={str(results['processing_needed']).lower()}\n")
-        f.write(f"keywords_needed={results.get('keywords_needed', 0)}\n")
-        f.write(f"embeddings_needed={results.get('embeddings_needed', 0)}\n")
+    # Query for embedding processing (example for 'page_embeddings_alpha').
+    # Finds UIDs that are not in the table OR where the content hash has changed.
+    embedding_query_alpha = text("""
+        SELECT pc.uid
+        FROM page_content pc
+        LEFT JOIN page_embeddings_alpha pe ON pc.uid = pe.uid
+        WHERE pc.is_active = TRUE
+        AND (pe.uid IS NULL OR md5(pc.extracted_content) != pe.content_hash)
+        GROUP BY pc.uid;
+    """)
 
-# Save results to a JSON file
-with open('data_check_results.json', 'w') as f:
-    json.dump(results, f, indent=2) 
+    # --- End of Corrected Query Logic ---
+
+    with engine.connect() as connection:
+        uids_for_keywords = pd.read_sql(keyword_query, connection)['uid'].tolist()
+        uids_for_embeddings_alpha = pd.read_sql(embedding_query_alpha, connection)['uid'].tolist()
+
+    # Consolidate all UIDs that need any form of processing
+    all_uids_to_process = set(uids_for_keywords) | set(uids_for_embeddings_alpha)
+    
+    processing_needed = bool(all_uids_to_process)
+
+    results = {
+        "processing_needed": processing_needed,
+        "keyword_processing_uids": uids_for_keywords,
+        "embedding_processing_uids": {
+            "page_embeddings_alpha": uids_for_embeddings_alpha
+        },
+        "total_uids_to_process": len(all_uids_to_process)
+    }
+
+    # Output results for GitHub Actions
+    if os.getenv('GITHUB_ACTIONS') == 'true':
+        # Ensure the output file exists and is writable
+        output_file = os.getenv('GITHUB_OUTPUT')
+        if output_file and os.access(os.path.dirname(output_file), os.W_OK):
+             with open(output_file, 'a') as f:
+                f.write(f"processing_needed={str(processing_needed).lower()}\n")
+                f.write(f"keyword_uids={json.dumps(uids_for_keywords)}\n")
+                f.write(f"embedding_uids_alpha={json.dumps(uids_for_embeddings_alpha)}\n")
+
+
+    return results
+
+if __name__ == "__main__":
+    check_results = check_for_updates()
+    print(json.dumps(check_results, indent=4))

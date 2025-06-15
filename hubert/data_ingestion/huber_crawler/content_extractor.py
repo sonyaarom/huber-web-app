@@ -5,8 +5,6 @@ from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 
 import requests
-import psycopg2
-import psycopg2.extras
 import trafilatura
 
 # Add the project root to the Python path to allow for absolute imports
@@ -15,7 +13,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Now that the path is set, we can use absolute imports
-from hubert.common.utils.db_utils import get_db_connection
+from hubert.db.postgres_storage import PostgresStorage
+from hubert.db.base_storage import BaseStorage
 
 # Configure logging
 logging.basicConfig(
@@ -73,100 +72,54 @@ def extract_info(html_content: str) -> Dict[str, str]:
 
     return {"title": title_text, "content": content_text}
 
-def get_records_to_process(conn) -> List[Tuple]:
-    """
-    Fetches records from page_raw that need content extraction.
-    This includes new pages or pages that have been updated more recently
-    than their corresponding content record.
-    """
-    query = """
-        SELECT pr.id, pr.url, pr.last_updated
-        FROM page_raw pr
-        LEFT JOIN page_content pc ON pr.id = pc.id
-        WHERE pr.is_active = TRUE AND (pc.id IS NULL OR pr.last_updated > pc.last_scraped);
-    """
-    with conn.cursor() as cur:
-        cur.execute(query)
-        records = cur.fetchall()
-    logger.info(f"Found {len(records)} active records to process for content extraction.")
-    return records
-
-def bulk_upsert_content(conn, data_to_upsert: list):
-    """
-    Performs a bulk UPSERT operation to the page_content table using psycopg2.
-    """
-    if not data_to_upsert:
-        logger.info("No new content to upsert.")
-        return
-
-    upsert_query = """
-        INSERT INTO page_content (id, url, html_content, title, content, last_updated, is_active, last_scraped)
-        VALUES %s
-        ON CONFLICT (id) DO UPDATE SET
-            url = EXCLUDED.url,
-            html_content = EXCLUDED.html_content,
-            title = EXCLUDED.title,
-            content = EXCLUDED.content,
-            last_updated = EXCLUDED.last_updated,
-            is_active = EXCLUDED.is_active,
-            last_scraped = EXCLUDED.last_scraped;
-    """
-    with conn.cursor() as cur:
-        try:
-            psycopg2.extras.execute_values(
-                cur,
-                upsert_query,
-                data_to_upsert,
-                page_size=100  # Batch in groups of 100 to manage memory
-            )
-            conn.commit()
-            logger.info(f"Successfully bulk upserted {len(data_to_upsert)} records into page_content.")
-        except Exception as e:
-            logger.error(f"An error occurred during bulk content upsert: {e}")
-            conn.rollback()
-
 if __name__ == "__main__":
     logger.info("Starting content extraction job.")
+    storage = PostgresStorage()
     try:
-        with get_db_connection() as conn:
-            # 1. Fetch all records that need processing in one go
-            records = get_records_to_process(conn)
+        records_to_process = storage.get_urls_to_process()
+
+        if not records_to_process:
+            logger.info("No records require content extraction. Exiting.")
+        else:
+            processed_data = []
+            now_timestamp = datetime.now()
             
-            if not records:
-                logger.info("No records require content extraction. Exiting.")
-            else:
-                # 2. Process records in memory: Fetch HTML and extract content
-                processed_data = []
-                now_timestamp = datetime.now()
-                for id, url, last_updated in records:
-                    logger.info(f"Processing URL: {url}")
+            for id, uid, url, last_updated in records_to_process:
+                logger.info(f"Processing URL: {url}")
+                try:
                     html_content = get_html_content(url)
                     if not html_content:
                         logger.warning(f"Skipping URL due to fetch failure: {url}")
+                        storage.log_failed_job(uid, 'content_extraction', "HTML content fetch failed")
                         continue
                     
                     extracted = extract_info(html_content)
 
-                    # Clean NUL characters which cause database errors
-                    clean_html = html_content.replace('\\x00', '')
-                    clean_title = extracted['title'].replace('\\x00', '')
-                    clean_content = extracted['content'].replace('\\x00', '') if extracted['content'] else ''
+                    clean_html = html_content.replace('\x00', '')
+                    clean_title = extracted['title'].replace('\x00', '')
+                    clean_content = extracted['content'].replace('\x00', '') if extracted['content'] else ''
                     
-                    processed_data.append((
-                        id,
-                        url,
-                        clean_html,
-                        clean_title,
-                        clean_content,
-                        last_updated,
-                        True, # is_active
-                        now_timestamp
-                    ))
-                
-                # 3. Perform a single bulk write operation to the database
-                bulk_upsert_content(conn, processed_data)
+                    processed_data.append({
+                        "id": id,
+                        "url": url,
+                        "html_content": clean_html,
+                        "title": clean_title,
+                        "content": clean_content,
+                        "last_updated": last_updated or datetime.now(),
+                        "is_active": True,
+                        "last_scraped": now_timestamp
+                    })
+                except Exception as e:
+                    logger.error(f"Error processing {url}: {e}")
+                    storage.log_failed_job(uid, 'content_extraction', str(e))
+            
+            if processed_data:
+                storage.upsert_page_content(processed_data)
+                logger.info(f"Successfully processed and upserted content for {len(processed_data)} pages.")
 
-        logger.info("Content extraction job finished successfully.")
     except Exception as e:
         logger.critical(f"An unhandled error occurred in the content extraction job: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        storage.close()
+        logger.info("Content extraction job finished.")

@@ -110,6 +110,26 @@ resource "null_resource" "create_page_keywords_table" {
 }
 
 
+resource "null_resource" "create_failed_jobs_table" {
+  depends_on = [null_resource.create_public_schema]
+  provisioner "local-exec" {
+    command = <<EOT
+    psql --host=${var.db_host} --port=${var.db_port} --username=${var.db_username} --dbname=${var.db_name} --command "
+    CREATE TABLE IF NOT EXISTS public.failed_jobs (
+        job_id SERIAL PRIMARY KEY,
+        uid TEXT NOT NULL,
+        job_type TEXT NOT NULL,
+        error_message TEXT,
+        failed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );"
+    EOT
+
+    environment = {
+      PGPASSWORD = var.db_password
+    }
+  }
+}
+
 resource "null_resource" "create_page_embeddings_table" {
   depends_on = [null_resource.create_extension, null_resource.create_public_schema]
   provisioner "local-exec" {
@@ -142,114 +162,4 @@ resource "null_resource" "create_page_embeddings_table" {
 
 resource "postgresql_schema" "public" {
   name  = "public"
-}
-resource "local_file" "bm25_search_function" {
-  content  = <<-EOT
-    CREATE OR REPLACE FUNCTION bm25_search(
-      p_query TEXT,
-      p_limit INTEGER DEFAULT 10,
-      p_k1 NUMERIC DEFAULT 1.2,
-      p_b NUMERIC DEFAULT 0.75,
-      p_table TEXT DEFAULT 'page_keywords'
-    )
-    RETURNS TABLE(
-      id TEXT,
-      score NUMERIC,
-      raw_text TEXT,
-      url TEXT
-    )
-    AS $$
-    DECLARE
-      sql_query TEXT;
-    BEGIN
-      sql_query := format($f$
-        WITH params AS (
-          SELECT
-            count(*) AS total_docs,
-            COALESCE((SELECT avg(length(tokenized_text::TEXT)) FROM %I), 1) AS avg_dl
-        ),
-        raw_scores AS (
-          SELECT
-            pk.id::TEXT AS id,
-            pk.url::TEXT AS url,
-            pk.raw_text::TEXT AS raw_text,
-            SUM(
-              CASE
-                WHEN ts_rank_cd(pk.tokenized_text, plainto_tsquery('simple', $1)) > 0
-                THEN ts_rank_cd(pk.tokenized_text, plainto_tsquery('simple', $1), 32) -- BM25 Ranking
-                ELSE 0
-              END
-            ) AS bm25_score
-          FROM %I pk
-          CROSS JOIN params p
-          WHERE pk.tokenized_text @@ plainto_tsquery('simple', $1)  -- Proper multi-word search
-          GROUP BY pk.id, pk.url, pk.raw_text
-          HAVING SUM(
-            CASE
-              WHEN ts_rank_cd(pk.tokenized_text, plainto_tsquery('simple', $1)) > 0
-              THEN ts_rank_cd(pk.tokenized_text, plainto_tsquery('simple', $1), 32)
-              ELSE 0
-            END
-          ) > 0
-        )
-        SELECT
-          c.id,
-          ROUND(c.bm25_score::NUMERIC, 3) AS score,
-          c.raw_text,
-          c.url
-        FROM raw_scores c
-        ORDER BY c.bm25_score DESC
-        LIMIT $2;
-      $f$, p_table, p_table);
-
-      RETURN QUERY EXECUTE sql_query
-        USING p_query, p_limit;
-    END;
-    $$ LANGUAGE plpgsql;
-  EOT
-  filename = "${path.module}/sql/bm25_search.sql"
-}
-
-resource "postgresql_function" "bm25_search" {
-  name     = "bm25_search"
-  database = var.db_name  
-  schema   = postgresql_schema.public.name
-  body     = local_file.bm25_search_function.content
-  
-  parameter {
-    name = "p_query"
-    type = "text"
-  }
-  
-  parameter {
-    name = "p_limit"
-    type = "integer"
-    default = 10
-  }
-  
-  parameter {
-    name = "p_k1"
-    type = "numeric"
-    default = 1.2
-  }
-  
-  parameter {
-    name = "p_b"
-    type = "numeric"
-    default = 0.75
-  }
-  
-  parameter {
-    name = "p_table"
-    type = "text"
-    default = "page_keywords"
-  }
-  
-  returns = "TABLE(id text, score numeric, raw_text text, url text)"
-  language = "plpgsql"
-  security_definer = false
-  
-  depends_on = [
-    local_file.bm25_search_function
-  ]
 }

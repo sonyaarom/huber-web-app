@@ -17,12 +17,24 @@ def get_db_connection():
 
 # Fetch Data from page_content Table
 def fetch_page_content(limit=None):
+    """
+    Fetches data from the page_content table.
+    
+    Args:
+        limit (int, optional): The maximum number of records to fetch. Defaults to None.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the page content data.
+    """
     if limit is not None:
-        query = f"SELECT id, url, extracted_content, last_scraped FROM page_content WHERE extracted_content IS NOT NULL LIMIT {limit};"
+        query = f"SELECT id, page_raw_uid, url, content, last_scraped FROM page_content WHERE content IS NOT NULL LIMIT {limit};"
     else:
-        query = f"SELECT id, url, extracted_content, last_scraped FROM page_content WHERE extracted_content IS NOT NULL ;"
+        query = "SELECT id, page_raw_uid, url, content, last_scraped FROM page_content WHERE content IS NOT NULL;"
     
     with get_db_connection() as conn:
         df = pd.read_sql(query, conn)
     
+    if 'page_raw_uid' in df.columns:
+        df.rename(columns={'page_raw_uid': 'uid'}, inplace=True)
+
     return df

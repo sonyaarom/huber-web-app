@@ -5,9 +5,9 @@ Supports multiple embedding methods and text chunking strategies.
 
 import sys
 import os
-from pathlib import Path
-import json
+import argparse
 import logging
+import hashlib
 from typing import List, Dict, Tuple, Optional, Union, Any
 import time
 
@@ -16,227 +16,174 @@ import pandas as pd
 import time
 from tqdm import tqdm
 from sqlalchemy import create_engine, inspect, text, Table, MetaData, Column, Integer, String, Text
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import ARRAY, REAL
 
-
 # Add the project root to the Python path
-project_root = str(Path(__file__).parent.parent.parent.parent.parent)
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Local imports
 from hubert.config import settings
-from hubert.common.utils.chunking_utils import recursive_chunk_text, character_chunk_text, semantic_chunk_text
-from hubert.common.utils.db_utils import fetch_page_content
+from hubert.common.utils.chunking_utils import get_chunking_strategy
+from hubert.common.utils.db_utils import fetch_page_content, get_db_connection
 from hubert.common.utils.embedding_utils import EmbeddingGenerator, ensure_token_limit
+from hubert.db.models import PageEmbeddings, FailedJob
+from hubert.db.postgres_storage import PostgresStorage
 
 # Configure logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def store_embeddings(
-    df: pd.DataFrame, 
-    chunking_method: str, 
-    chunk_size: int, 
-    model_name: str,
-    table_name: Optional[str] = None
-) -> None:
+def get_session(db_uri):
+    """Creates and returns a new SQLAlchemy session."""
+    engine = create_engine(db_uri)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+def log_failed_job(db_uri:str, uid: str, job_type: str, error: Exception):
     """
-    Stores document embeddings and their metadata in a database table.
-    
-    This function processes a DataFrame of documents, generates embeddings for text chunks,
-    and upserts them into a specified PostgreSQL table. It handles table creation,
-    data insertion, and conflict resolution.
-    
-    Args:
-        df: DataFrame with 'uid', 'url', and 'content' columns
-        chunking_method: Strategy for splitting text ('recursive', 'character', 'semantic')
-        chunk_size: The size of each text chunk
-        model_name: The name of the embedding model used
-        table_name: The name of the database table to store embeddings
-        
-    Raises:
-        ValueError: If the table name is not specified or chunking method is invalid
+    Logs a failed job to the failed_jobs table.
     """
-    if not table_name:
-        raise ValueError("Table name must be specified.")
-
-    # Determine embedding method from settings
-    embedding_method = settings.embedding_method or "openai"
-    
-    # Initialize the embedding generator
-    generator = EmbeddingGenerator(method=embedding_method, model_name=model_name)
-    
-    all_embeddings_data = []
-
-    # Choose the chunking function
-    chunking_functions = {
-        'recursive': recursive_chunk_text,
-        'character': character_chunk_text,
-        'semantic': semantic_chunk_text
-    }
-    
-    if chunking_method not in chunking_functions:
-        raise ValueError(f"Invalid chunking method: {chunking_method}")
-    
-    chunk_function = chunking_functions[chunking_method]
-
-    # Process each document
-    for _, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing documents"):
-        doc_id = row['uid']
-        doc_url = row['url']
-        content = row['content']
-        
-        if not content or not isinstance(content, str):
-            logger.warning(f"Skipping document {doc_id} due to empty or invalid content.")
-            continue
-
-        # Split text into chunks
-        chunks = chunk_function(content, chunk_size=chunk_size)
-        
-        # Generate embeddings for chunks
-        if chunks:
-            try:
-                # Ensure each chunk respects the token limit before generating embeddings
-                limited_chunks = []
-                for chunk in chunks:
-                    limited_chunks.extend(ensure_token_limit(chunk, model_name))
-                
-                chunk_embeddings = generator.generate_embeddings(limited_chunks)
-                
-                # Prepare data for storage
-                for i, chunk_text in enumerate(limited_chunks):
-                    embedding_vector = chunk_embeddings[i]
-                    all_embeddings_data.append({
-                        'uid': doc_id,
-                        'url': doc_url,
-                        'chunk_text': chunk_text,
-                        'embedding': embedding_vector,
-                        'model_name': model_name,
-                        'chunking_method': chunking_method,
-                        'chunk_size': chunk_size
-                    })
-            except Exception as e:
-                logger.error(f"Failed to generate embeddings for document {doc_id}: {e}")
-
-    # Store all collected data in the database
-    if all_embeddings_data:
-        try:
-            db_url = f"postgresql://{settings.db_username}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
-            engine = create_engine(db_url)
-            
-            metadata = MetaData()
-            # Reflect the table to get its structure, especially the embedding dimension
-            insp = inspect(engine)
-            if not insp.has_table(table_name):
-                # If table doesn't exist, create it with a default embedding dimension
-                logger.info(f"Table '{table_name}' not found, creating it.")
-                embedding_dim = len(all_embeddings_data[0]['embedding'])
-                
-                Table(
-                    table_name,
-                    metadata,
-                    Column('id', Integer, primary_key=True, autoincrement=True),
-                    Column('uid', String, nullable=False),
-                    Column('url', String),
-                    Column('chunk_text', Text),
-                    Column('embedding', ARRAY(REAL, dimensions=1)),
-                    Column('model_name', String),
-                    Column('chunking_method', String),
-                    Column('chunk_size', Integer)
-                )
-                metadata.create_all(engine)
-            
-            # Use pandas to_sql for efficient bulk upsert
-            embeddings_df = pd.DataFrame(all_embeddings_data)
-            with engine.connect() as connection:
-                embeddings_df.to_sql(
-                    table_name, 
-                    connection, 
-                    if_exists='append', 
-                    index=False,
-                    method='multi'  # Use multi-value insert for efficiency
-                )
-                logger.info(f"Successfully stored {len(all_embeddings_data)} embeddings in '{table_name}'.")
-
-        except Exception as e:
-            logger.error(f"Database operation failed: {e}")
-
-    # Clean up the generator resources
-    generator.cleanup()
-
-def process_and_store_embeddings(
-    chunk_size: int = 512, 
-    chunk_overlap: int = 50, 
-    batch_size: int = 8, 
-    chunking_method: str = 'recursive',
-    model_name: Optional[str] = None, 
-    api_key: Optional[str] = None, 
-    prefer_openai: bool = True, 
-    table_name: Optional[str] = None
-) -> None:
-    """
-    Main function to orchestrate the fetching, processing, and storing of text embeddings.
-    
-    This function ties together fetching page content, generating embeddings based on specified
-    parameters, and storing them in the database. It serves as the primary entry point for
-    the embedding generation pipeline.
-    
-    Args:
-        chunk_size: The target size for text chunks.
-        chunk_overlap: The overlap between consecutive chunks.
-        batch_size: The number of items to process in a single batch.
-        chunking_method: The method to use for splitting text.
-        model_name: The name of the embedding model to use.
-        api_key: The API key for the embedding service (if applicable).
-        prefer_openai: Whether to prefer OpenAI for embeddings if available.
-        table_name: The name of the table to store embeddings.
-    """
-    start_time = time.time()
-    
-    # Validate and get the table name from settings if not provided
-    table_name = table_name or settings.table_name
-    if not table_name:
-        raise ValueError("Table name must be provided either as an argument or in settings.")
-    
-    # Determine embedding model from settings or arguments
-    model_name = model_name or settings.embedding_model
-    
-    # Fetch page content from the database
+    session = get_session(db_uri)
     try:
-        page_content_df = fetch_page_content()
-        if page_content_df.empty:
-            logger.info("No page content found to process.")
-            return
+        failed_job = FailedJob(
+            uid=uid,
+            job_type=job_type,
+            error_message=str(error)
+        )
+        session.add(failed_job)
+        session.commit()
+        logger.info(f"Successfully logged failed job for uid: {uid}")
     except Exception as e:
-        logger.error(f"Failed to fetch page content: {e}")
+        logger.error(f"Failed to log failed job for uid {uid}: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+
+def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_name: str, chunk_options: dict, uids: Optional[List[str]] = None):
+    """
+    Fetches content, chunks it, generates embeddings, and stores them in the database.
+    Includes a content_hash for data lineage.
+    If uids are provided, it processes only those. Otherwise, it looks for content
+    that hasn't been processed yet.
+    """
+    engine = create_engine(db_uri)
+
+    if uids:
+        logger.info(f"Processing specific UIDs: {uids}")
+        query = text("SELECT uid, extracted_content FROM page_content WHERE uid = ANY(:uids)")
+        df = pd.read_sql(query, engine, params={'uids': uids})
+    else:
+        logger.info("No UIDs provided. Fetching content without embeddings.")
+        # This query assumes that if a uid from page_content is not in the embeddings table, it needs processing.
+        # This is a simplified version of the original logic.
+        query = text(f"""
+            SELECT pc.uid, pc.extracted_content
+            FROM page_content pc
+            LEFT JOIN {table_name} emb ON pc.uid = emb.uid
+            WHERE emb.uid IS NULL AND pc.extracted_content IS NOT NULL
+        """)
+        df = pd.read_sql(query, engine)
+        uids_to_process = df['uid'].tolist()
+        if not uids_to_process:
+            logger.info(f"No new content to process for embeddings in table {table_name}.")
+            return
+        logger.info(f"Found {len(uids_to_process)} new pages to process.")
+
+
+    if df.empty:
+        logger.warning(f"No content found for the given UIDs.")
         return
 
-    # Store embeddings
-    store_embeddings(
-        df=page_content_df,
-        chunking_method=chunking_method,
-        chunk_size=chunk_size,
-        model_name=model_name,
-        table_name=table_name
-    )
+    # Compute content hash
+    df['content_hash'] = df['extracted_content'].apply(lambda x: hashlib.md5(x.encode('utf-8')).hexdigest() if pd.notna(x) else None)
+
+    chunking_strategy = get_chunking_strategy(chunk_strategy_name, **chunk_options)
     
-    end_time = time.time()
-    logger.info(f"Embedding generation completed in {end_time - start_time:.2f} seconds.")
+    all_chunks = []
+    for _, row in df.iterrows():
+        if not row['extracted_content']:
+            continue
+        try:
+            chunks = chunking_strategy.split_text(row['extracted_content'])
+            for i, chunk_text in enumerate(chunks):
+                all_chunks.append({
+                    'uid': row['uid'],
+                    'chunk_id': i,
+                    'chunk_text': chunk_text,
+                    'content_hash': row['content_hash']
+                })
+        except Exception as e:
+            logger.error(f"Failed to chunk content for uid {row['uid']}: {e}")
+            log_failed_job(db_uri, row['uid'], 'chunking', e)
 
 
-if __name__ == '__main__':
-    # Example of how to run the embedding generation process
-    logging.basicConfig(level=logging.INFO)
+    if not all_chunks:
+        logger.info(f"No chunks generated. Content might be empty or too small.")
+        return
+
+    chunks_df = pd.DataFrame(all_chunks)
     
-    # For demonstration, you might need to set up your environment variables
-    # for database and API keys as defined in the Settings class.
+    # Generate embeddings
+    # Assuming EmbeddingGenerator is configured via settings or environment variables
+    embedding_generator = EmbeddingGenerator(method=settings.embedding_method, model_name=settings.embedding_model)
+    try:
+        embeddings = embedding_generator.generate_embeddings(chunks_df['chunk_text'].tolist())
+        chunks_df['embedding'] = embeddings
+    except Exception as e:
+        logger.error(f"Failed to generate embeddings: {e}")
+        # Log failure for all UIDs in this batch
+        for uid in df['uid'].unique():
+            log_failed_job(db_uri, uid, 'embedding', e)
+        return
+
+
+    # Store in DB
+    with engine.begin() as connection:
+        # First, delete old embeddings for these UIDs to handle content updates
+        uids_to_delete = chunks_df['uid'].unique().tolist()
+        if uids_to_delete:
+            connection.execute(text(f"DELETE FROM {table_name} WHERE uid = ANY(:uids)"), {'uids': uids_to_delete})
+        
+        # Then, insert new embeddings
+        chunks_df.to_sql(table_name, connection, if_exists='append', index=False, method='multi')
+        logger.info(f"Successfully stored {len(chunks_df)} chunks in {table_name}.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate and store embeddings for page content.")
+    parser.add_argument('--uids', nargs='+', help='Optional list of UIDs to process.')
+    parser.add_argument('--table-name', type=str, default=settings.table_name,
+                        help='Name of the table to store embeddings.')
+    parser.add_argument('--chunk-strategy', type=str, default='recursive_chunk_text',
+                        help='Name of the chunking strategy to use (e.g., recursive_chunk_text).')
+    parser.add_argument('--chunk-size', type=int, default=512,
+                        help='The size of each text chunk.')
+    parser.add_argument('--chunk-overlap', type=int, default=50,
+                        help='The overlap between chunks.')
     
-    # Example run with specific parameters
+    args = parser.parse_args()
+
+    db_uri = f"postgresql://{settings.db_username}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+    chunk_options = {
+        'chunk_size': args.chunk_size,
+        'chunk_overlap': args.chunk_overlap
+        }
+    
+    # This is a bit of a hack to make the strategy name match the function name.
+    # In a real scenario, get_chunking_strategy would be more robust.
+    if args.chunk_strategy == 'recursive':
+        args.chunk_strategy = 'recursive_chunk_text'
+
+
     process_and_store_embeddings(
-        chunk_size=1024,
-        chunk_overlap=100,
-        chunking_method='recursive',
-        model_name='text-embedding-3-small', # Example model
-        table_name='page_embeddings_demo' # Example table
+        db_uri=db_uri,
+        table_name=args.table_name,
+        chunk_strategy_name=args.chunk_strategy,
+        chunk_options=chunk_options,
+        uids=args.uids
     ) 
