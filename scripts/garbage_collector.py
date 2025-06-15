@@ -39,7 +39,7 @@ def run_garbage_collection():
         cursor = conn.cursor()
 
         logger.info("Identifying inactive UIDs from page_raw...")
-        cursor.execute("SELECT uid FROM page_raw WHERE is_active = FALSE;")
+        cursor.execute("SELECT id FROM page_raw WHERE is_active = FALSE;")
         inactive_uids = [row[0] for row in cursor.fetchall()]
 
         if not inactive_uids:
@@ -50,12 +50,12 @@ def run_garbage_collection():
 
         # 1. Delete from page_content
         logger.info("Deleting from page_content...")
-        cursor.execute("DELETE FROM page_content WHERE uid = ANY(%s);", (inactive_uids,))
+        cursor.execute("DELETE FROM page_content WHERE id = ANY(%s);", (inactive_uids,))
         logger.info(f"Deleted {cursor.rowcount} records from page_content.")
 
         # 2. Delete from page_keywords
         logger.info("Deleting from page_keywords...")
-        cursor.execute("DELETE FROM page_keywords WHERE uid = ANY(%s);", (inactive_uids,))
+        cursor.execute("DELETE FROM page_keywords WHERE id = ANY(%s);", (inactive_uids,))
         logger.info(f"Deleted {cursor.rowcount} records from page_keywords.")
 
         # 3. Delete from all embedding tables
