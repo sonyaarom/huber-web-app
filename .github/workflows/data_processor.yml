@@ -1,3 +1,17 @@
+name: Data Processor
+
+on:
+  # Run after sitemap crawler is completed
+  workflow_run:
+    workflows: ["Sitemap Crawler and Content Ingestion"]
+    types:
+      - completed
+  # Allow manual triggering
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  
 jobs:
   check-and-process:
     runs-on: ubuntu-latest
