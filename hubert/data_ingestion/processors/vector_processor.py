@@ -1,10 +1,9 @@
 from ..utils.embedding_utils import process_and_store_embeddings
-from src.config import settings
+from hubert.data_ingestion.config import settings
 import logging
 import os
-import pandas as pd
-from sqlalchemy import create_engine, text
-from datetime import datetime
+import sys
+import argparse
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -16,48 +15,37 @@ if hasattr(settings, 'openai_api_key') and settings.openai_api_key:
     logger.info("Set OPENAI_API_KEY environment variable")
 
 def main():
-    embeddings = ['text-embedding-3-small']
-    # Define a list of chunk sizes to loop through
-    chunk_sizes = [512]
-    # Include semantic in the list of chunking methods along with others
-    chunking_methods = ['recursive']
+    parser = argparse.ArgumentParser(description="Process and store text embeddings.")
+    parser.add_argument('--model-name', type=str, default='text-embedding-3-small', help='Name of the embedding model to use.')
+    parser.add_argument('--chunk-size', type=int, default=512, help='Chunk size for text processing.')
+    parser.add_argument('--chunking-method', type=str, default='recursive', help='Chunking method to use.')
+    parser.add_argument('--table-name', type=str, required=True, help='Name of the database table to store embeddings in.')
+    
+    args = parser.parse_args()
     
     # Get API key from settings or environment
     api_key = getattr(settings, 'openai_api_key', os.environ.get("OPENAI_API_KEY"))
-    if not api_key and 'text-embedding-3-small' in embeddings:
-        logger.warning("No OpenAI API key found. OpenAI embeddings will not be available.")
-        embeddings = [e for e in embeddings if not e.startswith('text-embedding')]
+    if not api_key and 'text-embedding' in args.model_name:
+        logger.error("No OpenAI API key found. Cannot generate embeddings.")
+        sys.exit(1)
     
-    for embedding in embeddings:
-        logger.info(f"Processing with embedding model: {embedding}")
-        for current_chunk_size in chunk_sizes:
-            for chunking_method in chunking_methods:
-                if chunking_method == 'semantic':
-                    # For semantic chunking, override chunk_size and chunk_overlap values
-                    cs = 0
-                    co = 0
-                    logger.info(f"Processing semantic chunking using {embedding} (ignoring chunk size).")
-                else:
-                    cs = current_chunk_size
-                    co = 50
-                    logger.info(f"Processing {chunking_method} chunking with size {cs} using {embedding}.")
-                try:
-                    process_and_store_embeddings(
-                        chunk_size=cs,
-                        chunk_overlap=co,
-                        batch_size=1,
-                        chunking_method=chunking_method,
-                        model_name=embedding,
-                        api_key=api_key,
-                        prefer_openai=True
-                    )
-                except Exception as e:
-                    if "maximum context length" in str(e):
-                        logger.warning(
-                            f"Skipping {chunking_method} chunking with size {cs} for {embedding} due to token limit error."
-                        )
-                    else:
-                        raise
+    logger.info(f"Processing with embedding model: {args.model_name}")
+    logger.info(f"Using {args.chunking_method} chunking with size {args.chunk_size}")
+    
+    try:
+        process_and_store_embeddings(
+            chunk_size=args.chunk_size,
+            chunk_overlap=50,
+            batch_size=1,
+            chunking_method=args.chunking_method,
+            model_name=args.model_name,
+            api_key=api_key,
+            prefer_openai=True,
+            table_name=args.table_name
+        )
+    except Exception as e:
+        logger.error(f"Error processing embeddings: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
