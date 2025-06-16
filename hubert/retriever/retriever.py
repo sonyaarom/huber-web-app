@@ -115,35 +115,41 @@ class HybridRetriever:
             bm25_results = self.storage.keyword_search(bm25_query_text, limit=retrieval_limit)
             
             # Combine and normalize scores
-            # This is a simplified combination logic.
-            # A more advanced approach would involve proper normalization (e.g., min-max)
-            # and combination of scores.
-            
-            vector_scores = {res['chunk']: res['similarity'] for res in vector_results}
-            bm25_scores = {res['content']: res['rank'] for res in bm25_results}
+            all_docs: Dict[Any, Dict[str, Any]] = {}
+            for res in vector_results:
+                key = (res['url'], res['content'])
+                if key not in all_docs:
+                    all_docs[key] = {'vec_score': 0, 'bm25_score': 0, 'doc': res}
+                all_docs[key]['vec_score'] = res.get('similarity', 0)
 
-            all_chunks = set(vector_scores.keys()) | set(bm25_scores.keys())
-            
+            for res in bm25_results:
+                key = (res['url'], res['content'])
+                if key not in all_docs:
+                    all_docs[key] = {'vec_score': 0, 'bm25_score': 0, 'doc': res}
+                all_docs[key]['bm25_score'] = res.get('rank', 0)
+
             combined_results = []
-            for chunk in all_chunks:
-                vec_score = vector_scores.get(chunk, 0)
-                bm25_s = bm25_scores.get(chunk, 0)
-                combined_score = (self.hybrid_alpha * vec_score) + ((1 - self.hybrid_alpha) * bm25_s)
-                combined_results.append({'chunk': chunk, 'score': combined_score})
+            for key, scores in all_docs.items():
+                combined_score = (self.hybrid_alpha * scores['vec_score']) + ((1 - self.hybrid_alpha) * scores['bm25_score'])
+                doc = scores['doc']
+                doc['score'] = combined_score
+                combined_results.append(doc)
 
             # Sort by combined score
             combined_results.sort(key=lambda x: x['score'], reverse=True)
             final_results = combined_results
         else:
-            final_results = [{'chunk': res['chunk'], 'score': res['similarity']} for res in vector_results]
+            final_results = vector_results
+            for res in final_results:
+                res['score'] = res.pop('similarity')
 
         if self.use_reranker and self.reranker:
-            pairs = [[query, res['chunk']] for res in final_results]
+            pairs = [[query, res['content']] for res in final_results]
             if pairs:
                 scores = self.reranker.predict(pairs)
                 for i, res in enumerate(final_results):
                     res['reranked_score'] = scores[i]
-                final_results.sort(key=lambda x: x['reranked_score'], reverse=True)
+                final_results.sort(key=lambda x: x.get('reranked_score', 0), reverse=True)
 
         logger.info(f"Retrieval took {time.time() - start_time:.2f} seconds.")
         return final_results[:self.top_k]

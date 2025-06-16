@@ -64,7 +64,7 @@ def retrieve_urls_endpoint():
             return jsonify({"error": "Question is required"}), 400
         
         # This now uses the cached retriever
-        response_data = get_urls(question)
+        response_data = rag_main_func(question)
         return jsonify(response_data)
         
     except Exception as e:

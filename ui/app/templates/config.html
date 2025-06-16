@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - HUBer</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        .container { max-width: 800px; margin: auto; }
+        .form-group { margin-bottom: 1em; }
+        label { display: block; margin-bottom: 0.5em; font-weight: bold; }
+        input { width: 100%; padding: 0.5em; box-sizing: border-box; }
+        input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+        }
+        .btn { padding: 0.75em 1.5em; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        .alert { padding: 1em; margin-bottom: 1em; border-radius: 5px; }
+        .alert-success { background-color: #d4edda; color: #155724; }
+        .current-config {
+            background-color: #f8f9fa;
+            padding: 1em;
+            border-radius: 5px;
+            margin: 1em 0;
+        }
+        .current-config h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .config-item {
+            margin: 0.5em 0;
+            padding: 0.5em;
+            background-color: white;
+            border-radius: 3px;
+        }
+        .config-item strong {
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HUBer System Configuration</h1>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="current-config">
+            <h3>Current Configuration</h3>
+            <div class="config-item">
+                <strong>NER Filtering:</strong> {{ 'Enabled' if config.use_ner == True else 'Disabled' }}
+            </div>
+            <div class="config-item">
+                <strong>Reranker:</strong> {{ 'Enabled' if config.use_reranker == True else 'Disabled' }}
+            </div>
+            <div class="config-item">
+                <strong>Hybrid Search Alpha:</strong> {{ config.hybrid_alpha }}
+            </div>
+            <div class="config-item">
+                <strong>Embedding Model:</strong> {{ config.embedding_model }}
+            </div>
+            <div class="config-item">
+                <strong>Reranker Model:</strong> {{ config.reranker_model }}
+            </div>
+        </div>
+
+        <p>Modify settings for experimentation. Changes are saved to the <code>.venv</code> file.</p>
+        
+        <form action="{{ url_for('main.config') }}" method="post">
+            <div class="form-group">
+                <label for="embedding_model">Embedding Model</label>
+                <input type="text" id="embedding_model" name="embedding_model" value="{{ config.embedding_model }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="reranker_model">Reranker Model</label>
+                <input type="text" id="reranker_model" name="reranker_model" value="{{ config.reranker_model }}">
+            </div>
+
+            <div class="form-group">
+                <label for="hybrid_alpha">Hybrid Search Alpha (Weight for sparse search, 0.0 to 1.0)</label>
+                <input type="number" step="0.01" min="0" max="1" id="hybrid_alpha" name="hybrid_alpha" value="{{ '%.2f' | format(config.hybrid_alpha) }}">
+            </div>
+
+            <div class="form-group">
+                <label for="use_ner">
+                    <input type="checkbox" id="use_ner" name="use_ner" {% if config.use_ner %}checked{% endif %}>
+                    Use NER Filtering
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="use_reranker">
+                    <input type="checkbox" id="use_reranker" name="use_reranker" {% if config.use_reranker %}checked{% endif %}>
+                    Use Reranker
+                </label>
+            </div>
+
+            <button type="submit" class="btn">Save Configuration</button>
+        </form>
+        <br>
+        <a href="{{ url_for('main.search') }}">Back to Search</a> | 
+        <a href="{{ url_for('main.logout') }}">Logout</a>
+    </div>
+</body>
+</html>

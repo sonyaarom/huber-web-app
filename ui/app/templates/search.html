@@ -369,7 +369,7 @@
                 $('#formatted-output').html('<p>Retrieving answer...</p>');
                 $('#search-results').show();
                 
-                // AJAX call to retrieve URLs
+                // AJAX call to retrieve URLs and answer
                 $.ajax({
                     type: 'POST',
                     url: '/retrieve_urls',
@@ -383,21 +383,10 @@
                         } else {
                             $('#url-list').html('<li>No relevant sources found. Try a different question.</li>');
                         }
-                    },
-                    error: function(error) {
-                        $('#url-list').html('<li>Error retrieving sources. Please try again.</li>');
-                        console.error('Error retrieving URLs:', error);
-                    }
-                });
-                
-                // AJAX call to retrieve the model's answer in raw Markdown
-                $.ajax({
-                    type: 'POST',
-                    url: '/retrieve_output',
-                    data: { 'question': question },
-                    success: function(response) {
+                        
+                        // Handle the answer
                         console.log("Raw output response:", response);
-                        const rawMarkdown = response.output;
+                        const rawMarkdown = response.answer;
                         
                         // Use appropriate marked API depending on version
                         const htmlContent = (typeof marked.parse === "function") ? marked.parse(rawMarkdown) : marked(rawMarkdown);
@@ -406,8 +395,9 @@
                         $('#formatted-output').html(htmlContent);
                     },
                     error: function(error) {
+                        $('#url-list').html('<li>Error retrieving sources. Please try again.</li>');
                         $('#formatted-output').html('<p>Error retrieving answer. Please try again.</p>');
-                        console.error('Error retrieving output:', error);
+                        console.error('Error retrieving data:', error);
                     }
                 });
             });

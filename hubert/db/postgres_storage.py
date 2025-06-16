@@ -111,7 +111,7 @@ class PostgresStorage(BaseStorage):
         self.connect()
         query = """
             SELECT pc.id, pc.extracted_content FROM page_content pc
-            LEFT JOIN page_keywords pk ON pc.id = pk.uid
+            LEFT JOIN page_keywords pk ON pc.id = pk.id
             WHERE pk.id IS NULL AND pc.extracted_content IS NOT NULL;
         """
         self.cursor.execute(query)
@@ -149,17 +149,17 @@ class PostgresStorage(BaseStorage):
         self.conn.commit()
 
     def vector_search(self, table_name: str, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
-        """Move logic from hubert.retriever.retriever.py"""
+        """Perform a vector search."""
         self.connect()
         query = f"""
-            SELECT chunk, 1 - (embedding <-> %s) AS similarity
+            SELECT url, chunk_text as content, 1 - (embedding <-> %s) AS similarity
             FROM {table_name}
             ORDER BY similarity DESC
             LIMIT %s;
         """
         self.cursor.execute(query, (np.array(query_embedding), limit))
         results = self.cursor.fetchall()
-        return [{"chunk": row[0], "similarity": row[1]} for row in results]
+        return [{"url": row[0], "content": row[1], "similarity": row[2]} for row in results]
     
     def upsert_keywords(self, keyword_records: List[Dict[str, Any]]):
         """Insert or update tsvector keywords for content."""
@@ -197,14 +197,13 @@ class PostgresStorage(BaseStorage):
         self.connect()
         query = """
             SELECT
-                pc.extracted_title,
-                pc.extracted_content,
                 pc.url,
+                pc.extracted_content as content,
                 ts_rank(pk.tokenized_text, plainto_tsquery('simple', %s)) AS rank
             FROM
                 page_content pc
             JOIN
-                page_keywords pk ON pc.id = pk.uid
+                page_keywords pk ON pc.id = pk.id
             WHERE
                 pk.tokenized_text @@ plainto_tsquery('simple', %s)
             ORDER BY
