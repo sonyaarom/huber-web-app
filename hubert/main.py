@@ -1,6 +1,8 @@
 from functools import lru_cache
-from .retriever import HybridRetriever, create_retriever
+from .retriever import HybridRetriever
 from .generator.main import together_generator as llm_main_func
+from typing import Optional, Dict, Any, List
+from .config import settings, reload_settings
 
 @lru_cache(maxsize=None)
 def get_retriever() -> HybridRetriever:
@@ -20,9 +22,9 @@ def retrieve_urls(question: str):
     urls = [doc['url'] for doc in retrieved_docs if 'url' in doc]
     return {"urls": urls}
 
-def rag_main_func(question: str):
+def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = None):
     """
-    Main function for the RAG model.
+    Main RAG function that orchestrates retrieval and generation.
     """
     # Use the cached retriever
     retriever = get_retriever()
@@ -34,13 +36,17 @@ def rag_main_func(question: str):
     # Generate the answer using the LLM
     answer = llm_main_func(question, context)
     
-    # Optionally, you can include URLs in the response if needed
-    urls = [doc['url'] for doc in retrieved_docs if 'url' in doc]
-    
-    return {"answer": answer, "urls": urls}
+    return {"answer": response, "sources": [doc.get('url') for doc in final_docs]}
 
 if __name__ == '__main__':
     # Example usage
-    question = "What is the capital of Germany?"
-    result = rag_main_func(question)
+    test_question = "What is the role of Stefan Lessmann?"
+    result = rag_main_func(test_question)
     print(result)
+
+    # Example with NER filter
+    ner_question = "Who is Stefan Lessmann?"
+    ner_filters = {"PERSON": ["Stefan Lessmann"]}
+    result_with_ner = rag_main_func(ner_question, ner_filters=ner_filters)
+    print("\nWith NER filtering:")
+    print(result_with_ner)

@@ -7,3 +7,4 @@ services:
       - .venv
     volumes:
       - ./metrics:/app/metrics
+      - ./.venv:/app/.venv

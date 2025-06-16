@@ -13,7 +13,7 @@ provider "postgresql" {
   database        = var.db_name
   username        = var.db_username
   password        = var.db_password
-  sslmode         = "disable"     
+  sslmode         = "require"     
   connect_timeout = 15
   superuser       = false
 }
@@ -76,6 +76,7 @@ resource "null_resource" "create_page_content_table" {
         html_content TEXT,
         extracted_title TEXT,
         extracted_content TEXT,
+        entities JSONB,
         is_active BOOLEAN DEFAULT TRUE,
         last_updated TIMESTAMP NOT NULL,
         last_scraped TIMESTAMP NOT NULL

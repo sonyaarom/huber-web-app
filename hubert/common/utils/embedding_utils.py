@@ -238,9 +238,16 @@ class EmbeddingGenerator:
         embeddings = []
         for i in tqdm(range(0, len(texts), self.batch_size), desc="Generating OpenAI embeddings"):
             batch_texts = texts[i:i+self.batch_size]
+
+            # Filter out empty or whitespace-only strings to avoid API errors
+            cleaned_batch = [text.strip() for text in batch_texts if text and text.strip()]
+            if not cleaned_batch:
+                continue
+
             try:
+                # Use the cleaned_batch instead of batch_texts
                 response = self.client.embeddings.create(
-                    input=batch_texts,
+                    input=cleaned_batch,
                     model=self.model_name
                 )
                 batch_embeddings = [item.embedding for item in response.data]

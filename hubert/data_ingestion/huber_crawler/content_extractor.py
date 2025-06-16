@@ -6,6 +6,8 @@ from typing import Optional, Dict, List, Tuple
 
 import requests
 import trafilatura
+import spacy
+from collections import defaultdict
 
 # Add the project root to the Python path to allow for absolute imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -76,6 +78,14 @@ if __name__ == "__main__":
     logger.info("Starting content extraction job.")
     storage = PostgresStorage()
     try:
+        # Load spaCy model
+        try:
+            nlp = spacy.load("en_core_web_sm")
+            logger.info("spaCy model 'en_core_web_sm' loaded successfully.")
+        except OSError:
+            logger.error("spaCy model 'en_core_web_sm' not found. Please run 'python -m spacy download en_core_web_sm'")
+            sys.exit(1)
+
         records_to_process = storage.get_urls_to_process()
 
         if not records_to_process:
@@ -99,12 +109,20 @@ if __name__ == "__main__":
                     clean_title = extracted['title'].replace('\x00', '')
                     clean_content = extracted['content'].replace('\x00', '') if extracted['content'] else ''
                     
+                    # Extract named entities
+                    entities = defaultdict(list)
+                    if clean_content:
+                        doc = nlp(clean_content)
+                        for ent in doc.ents:
+                            entities[ent.label_].append(ent.text)
+                    
                     processed_data.append({
                         "id": id,
                         "url": url,
                         "html_content": clean_html,
-                        "title": clean_title,
-                        "content": clean_content,
+                        "extracted_title": clean_title,
+                        "extracted_content": clean_content,
+                        "entities": dict(entities),  # Convert defaultdict to dict for JSON serialization
                         "last_updated": last_updated or datetime.now(),
                         "is_active": True,
                         "last_scraped": now_timestamp

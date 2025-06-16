@@ -1,8 +1,11 @@
+import os
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Union, Dict
+from dotenv import load_dotenv
 
 class Settings(BaseSettings):
+    base_dir: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # --------------------------------------------------------------------------
     # Database Settings
     # --------------------------------------------------------------------------
@@ -21,6 +24,8 @@ class Settings(BaseSettings):
     langfuse_public_key: Optional[str] = Field(env='LANGFUSE_PUBLIC_KEY', default=None)
     pinecone_api_key: Optional[str] = Field(env='PINECONE_API_KEY', default=None)
     langchain_api_key: Optional[str] = Field(env='LANGCHAIN_API_KEY', default=None)
+    secret_key: str = Field(env='SECRET_KEY', default='a-super-secret-key-for-development')
+    admin_password: str = Field(env='ADMIN_PASSWORD', default='password')
     
     # --------------------------------------------------------------------------
     # Langfuse Settings
@@ -62,7 +67,8 @@ class Settings(BaseSettings):
     # Hybrid Search Settings
     # --------------------------------------------------------------------------
     use_hybrid_search: bool = Field(env='USE_HYBRID_SEARCH', default=True)
-    hybrid_alpha: Union[float, List[float]] = Field(env='HYBRID_ALPHA', default=0.5)
+    hybrid_alpha: float = Field(env='HYBRID_ALPHA', default=0.5)
+    use_ner: bool = Field(env='USE_NER', default=False)
 
     # --------------------------------------------------------------------------
     # Data Ingestion Settings
@@ -110,7 +116,22 @@ class Settings(BaseSettings):
         extra = 'ignore'
         case_sensitive = False
 
-settings = Settings() 
+        @classmethod
+        def parse_env_var(cls, field_name: str, raw_val: str) -> any:
+            if field_name in ['use_ner', 'use_reranker', 'use_hybrid_search']:
+                return raw_val.lower() == 'true'
+            return raw_val
+
+# Initialize settings
+settings = Settings()
+
+def reload_settings():
+    """Reload settings from the .venv file."""
+    global settings
+    dotenv_path = os.path.join(settings.base_dir, '.venv')
+    load_dotenv(dotenv_path=dotenv_path, override=True)
+    settings = Settings()
+    return settings
 
 DB_PARAMS = {
     "host": settings.db_host,

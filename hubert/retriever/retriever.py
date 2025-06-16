@@ -49,6 +49,7 @@ class HybridRetriever:
         reranker_model: str = settings.reranker_model,
         use_hybrid_search: bool = settings.use_hybrid_search,
         hybrid_alpha: float = settings.hybrid_alpha,
+        use_full_content: bool = False,
     ):
         """
         Initialize the retriever.
@@ -62,6 +63,7 @@ class HybridRetriever:
             reranker_model: Model name for the reranker
             use_hybrid_search: Whether to use hybrid search (combining vector search with BM25)
             hybrid_alpha: Weight for vector search in hybrid search (1-alpha is weight for BM25)
+            use_full_content: Whether to retrieve full content or chunks
         """
         self.embedding_model = embedding_model
         self.embedding_method = embedding_method
@@ -71,6 +73,7 @@ class HybridRetriever:
         self.reranker_model = reranker_model
         self.use_hybrid_search = use_hybrid_search
         self.hybrid_alpha = hybrid_alpha
+        self.use_full_content = use_full_content
         
         self.storage = PostgresStorage()
         self.embedding_generator = EmbeddingGenerator(
@@ -88,12 +91,13 @@ class HybridRetriever:
                 logger.error(f"Failed to initialize reranker: {e}")
                 self.use_reranker = False
     
-    def retrieve(self, query: str) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Retrieve relevant documents for a query.
         
         Args:
             query: The query text
+            filters: Optional dictionary for filtering results based on metadata
             
         Returns:
             List of dictionaries containing document information and similarity scores
@@ -108,11 +112,11 @@ class HybridRetriever:
         
         retrieval_limit = self.top_k * 3 if self.use_hybrid_search else self.top_k * 2 if self.use_reranker else self.top_k
 
-        vector_results = self.storage.vector_search(self.table_name, query_embedding, limit=retrieval_limit)
+        vector_results = self.storage.vector_search(self.table_name, query_embedding, limit=retrieval_limit, filters=filters)
         
         if self.use_hybrid_search:
             bm25_query_text = process_text(query)
-            bm25_results = self.storage.keyword_search(bm25_query_text, limit=retrieval_limit)
+            bm25_results = self.storage.keyword_search(bm25_query_text, limit=retrieval_limit, filters=filters)
             
             # Combine and normalize scores
             all_docs: Dict[Any, Dict[str, Any]] = {}
@@ -160,9 +164,9 @@ class HybridRetriever:
         self.embedding_generator.cleanup()
 
 
-def create_retriever() -> HybridRetriever:
+def create_retriever(use_full_content: bool = False) -> HybridRetriever:
     """Factory function to create a retriever with default settings."""
-    return HybridRetriever()
+    return HybridRetriever(use_full_content=use_full_content)
 
 
 if __name__ == "__main__":
