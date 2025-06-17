@@ -4,6 +4,7 @@ from src.generator.generator_utils.generator_utils import initialize_models, gen
 from src.generator.main import together_generator
 from src.generator.prompt_utils.prompt_templates import PromptFactory
 from src.generator.prompt_utils.config import settings
+from hubert.main import retrieve_urls as retrieve_urls_main
 import logging
 
 # Configure logging
@@ -63,28 +64,15 @@ def search():
     return render_template('search.html')
 
 @app.route('/retrieve_urls', methods=['POST'])
-def retrieve_urls():
+def retrieve_urls_endpoint():
     question = request.form.get('question', '')
     
     if not question:
         return jsonify({'error': 'Question is required'}), 400
     
     try:
-        # This is a placeholder implementation
-        # In a real implementation, you would use your embedding_generator and reranker_model
-        # to find relevant URLs based on the question
-        
-        # Mock response with sample URLs for demonstration
-        sample_urls = [
-            "https://www.hu-berlin.de/en/studies/counselling/course-catalogue",
-            "https://www.hu-berlin.de/en/studies/admission/application",
-            "https://www.hu-berlin.de/en/research/services/resources"
-        ]
-        
-        return jsonify({
-            'question': question,
-            'urls': sample_urls
-        })
+        results = retrieve_urls_main(question)
+        return jsonify(results)
     
     except Exception as e:
         logger.error(f"Error retrieving URLs: {e}")

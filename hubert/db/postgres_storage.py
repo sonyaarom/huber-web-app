@@ -3,16 +3,27 @@ import numpy as np
 from psycopg2.extras import execute_values, Json
 from pgvector.psycopg2 import register_vector
 from typing import List, Dict, Any, Tuple
+from urllib.parse import quote_plus
 from hubert.db.base_storage import BaseStorage
-from hubert.config import DB_PARAMS
+from hubert.config import settings
 from psycopg2 import pool
 
 class PostgresStorage(BaseStorage):
     """Concrete implementation of the BaseStorage interface for PostgreSQL."""
 
-    def __init__(self, db_params: Dict[str, Any] = DB_PARAMS, min_conn: int = 1, max_conn: int = 10):
-        self.db_params = db_params
-        self.pool = pool.SimpleConnectionPool(min_conn, max_conn, **db_params)
+    def __init__(self, db_params: Dict[str, Any] = None, min_conn: int = 1, max_conn: int = 10):
+        if db_params is None:
+            db_params = {
+                "host": settings.db_host,
+                "port": settings.db_port,
+                "dbname": settings.db_name,
+                "user": settings.db_username,
+                "password": settings.db_password,
+            }
+
+        dsn = self._build_dsn(db_params)
+        self.pool = pool.SimpleConnectionPool(min_conn, max_conn, dsn)
+        
         # Register pgvector with a connection from the pool
         conn = self.pool.getconn()
         try:
@@ -20,23 +31,53 @@ class PostgresStorage(BaseStorage):
         finally:
             self.pool.putconn(conn)
 
+    def _build_dsn(self, db_params: Dict[str, Any]) -> str:
+        """Builds the DSN string for psycopg2."""
+        host = db_params.get("host")
+        if host and 'neon.tech' in host:
+            endpoint_id = host.split('.')[0]
+            options = f"endpoint%3D{endpoint_id}"
+
+            user = quote_plus(db_params.get('user'))
+            password = quote_plus(db_params.get('password'))
+            
+            return (
+                f"postgresql://{user}:{password}@"
+                f"{host}:{db_params.get('port')}/{db_params.get('dbname')}"
+                f"?sslmode=require&options={options}"
+            )
+        
+        # Fallback to the original DSN format for non-Neon DBs
+        return (
+            f"host={db_params.get('host')} "
+            f"port={db_params.get('port')} "
+            f"dbname={db_params.get('dbname')} "
+            f"user={db_params.get('user')} "
+            f"password={db_params.get('password')}"
+        )
+
     def close(self):
         """Close the database connection pool."""
         if self.pool:
             self.pool.closeall()
 
-    def _execute_query(self, query: str, params: Tuple = None, fetch: str = None):
+    def connect(self):
+        """Establish a connection to the data store."""
+        return self.pool.getconn()
+
+    def _execute_query(self, query: str, params: Tuple = None, fetch: str = None, commit=False):
         """Helper function to execute a query using a connection from the pool."""
         conn = None
         try:
             conn = self.pool.getconn()
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
-                conn.commit()
                 if fetch == 'one':
                     return cursor.fetchone()
                 if fetch == 'all':
                     return cursor.fetchall()
+                if commit:
+                    conn.commit()
         except psycopg2.Error as e:
             # In case of an error, rollback and re-raise
             if conn:
@@ -169,18 +210,39 @@ class PostgresStorage(BaseStorage):
             if conn:
                 self.pool.putconn(conn)
 
-    def vector_search(self, table_name: str, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+    def vector_search(self, table_name: str, query_embedding: List[float], limit: int = 5, filters: Dict[str, Any] = None, threshold: float = None) -> List[Dict[str, Any]]:
         """Perform a vector search."""
-        self.connect()
-        query = f"""
-            SELECT url, chunk_text as content, 1 - (embedding <-> %s) AS similarity
-            FROM {table_name}
-            ORDER BY similarity DESC
-            LIMIT %s;
-        """
-        self.cursor.execute(query, (np.array(query_embedding), limit))
-        results = self.cursor.fetchall()
-        return [{"url": row[0], "content": row[1], "similarity": row[2]} for row in results]
+        params = [np.array(query_embedding)]
+        
+        query_parts = [
+            f"SELECT t.url, t.chunk_text as content, 1 - (t.embedding <-> %s) AS similarity",
+            f"FROM {table_name} t"
+        ]
+        
+        where_clauses = []
+        
+        if filters:
+            # Join with page_content to filter by entities
+            query_parts.append("JOIN page_content pc ON t.url = pc.url")
+            for key, values in filters.items():
+                if values:
+                    json_filter = {key: values}
+                    where_clauses.append("pc.entities @> %s::jsonb")
+                    params.append(Json(json_filter))
+
+        if where_clauses:
+            query_parts.append("WHERE " + " AND ".join(where_clauses))
+
+        query_parts.append("ORDER BY similarity DESC")
+        query_parts.append("LIMIT %s")
+        params.append(limit)
+        
+        final_query = "\n".join(query_parts)
+        results = self._execute_query(final_query, tuple(params), fetch='all')
+        
+        # Convert to list of dictionaries
+        result_dicts = [{"url": row[0], "content": row[1], "similarity": row[2]} for row in results]
+        return result_dicts
     
     def upsert_keywords(self, keyword_records: List[Dict[str, Any]]):
         """Insert or update tsvector keywords for content."""
@@ -208,7 +270,8 @@ class PostgresStorage(BaseStorage):
     def keyword_search(self, query_text: str, limit: int = 5, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Perform a full-text search."""
         params = [query_text, query_text]
-        query = """
+        query_parts = [
+            """
             SELECT
                 pc.url,
                 pc.extracted_content as content,
@@ -217,17 +280,31 @@ class PostgresStorage(BaseStorage):
                 page_content pc
             JOIN
                 page_keywords pk ON pc.id = pk.id
-            WHERE
-                pk.tokenized_text @@ plainto_tsquery('simple', %s)
-            ORDER BY
-                rank DESC
-            LIMIT %s;
-        """
-        self.cursor.execute(query, (query_text, query_text, limit))
-        results = self.cursor.fetchall()
+            """
+        ]
         
-        columns = [desc[0] for desc in self.cursor.description]
-        return [dict(zip(columns, row)) for row in results]
+        where_clauses = ["pk.tokenized_text @@ plainto_tsquery('simple', %s)"]
+
+        if filters:
+            for key, values in filters.items():
+                if values:
+                    json_filter = {key: values}
+                    where_clauses.append("pc.entities @> %s::jsonb")
+                    params.append(Json(json_filter))
+        
+        query_parts.append("WHERE " + " AND ".join(where_clauses))
+        
+        query_parts.append("ORDER BY rank DESC")
+        query_parts.append("LIMIT %s")
+        params.append(limit)
+        
+        query = "\n".join(query_parts)
+        
+        results = self._execute_query(query, tuple(params), fetch='all')
+        
+        columns = ['url', 'content', 'rank']
+        result_dicts = [dict(zip(columns, row)) for row in results]
+        return result_dicts
 
     def purge_inactive_records(self):
         """Delete all records associated with inactive URLs."""
@@ -253,7 +330,7 @@ class PostgresStorage(BaseStorage):
     def log_failed_job(self, uid: str, job_type: str, error: str = ""):
         """Log a failed job attempt."""
         query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
-        self._execute_query(query, (uid, job_type, error))
+        self._execute_query(query, (uid, job_type, error), commit=True)
 
     def purge_specific_inactive_records(self, inactive_uids: List[str]) -> int:
         """Delete records for a specific list of inactive UIDs."""

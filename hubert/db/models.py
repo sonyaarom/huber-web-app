@@ -38,16 +38,6 @@ class PageKeywords(Base):
     )
 
 class PageEmbeddings(Base):
-    __tablename__ = 'page_embeddings_a'
-    id = Column(Integer, primary_key=True)
-    split_id = Column(Integer, nullable=False)
-    url = Column(Text)
-    chunk_text = Column(Text)
-    embedding = Column(Vector(1536), nullable=False)
-    last_scraped = Column(DateTime(timezone=True), default=func.now())
-
-# Additional embedding tables
-class PageEmbeddingsAlpha(Base):
     __tablename__ = 'page_embeddings_alpha'
     id = Column(String, primary_key=True)
     split_id = Column(Integer, nullable=False)
@@ -55,6 +45,15 @@ class PageEmbeddingsAlpha(Base):
     chunk_text = Column(Text)
     embedding = Column(Vector(1536), nullable=False)
     last_scraped = Column(DateTime(timezone=True), default=func.now())
+    __table_args__ = (
+        Index(
+            'ix_page_embeddings_alpha_embedding',
+            embedding,
+            postgresql_using='hnsw',
+            postgresql_with={'m': 16, 'ef_construction': 64},
+            postgresql_ops={'embedding': 'vector_l2_ops'}
+        ),
+    )
 
 class PageEmbeddingsGeneric(Base):
     __tablename__ = 'page_embeddings'

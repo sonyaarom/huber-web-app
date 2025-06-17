@@ -5,7 +5,7 @@ from hubert.config import settings
 socketio = SocketIO()
 
 def create_app():
-    app = Flask(__name__, static_folder='../static')
+    app = Flask(__name__, static_folder='static')
     app.config["SECRET_KEY"] = settings.secret_key
 
     from .views.main import bp as main_blueprint
