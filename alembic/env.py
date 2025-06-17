@@ -1,4 +1,5 @@
 import os
+import sys
 from logging.config import fileConfig
 from dotenv import load_dotenv
 
@@ -7,27 +8,21 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# This is the new part: Point to your models' Base
-# We will create this file in the next step
 from hubert.db.models import Base
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
+#----------------------------------------------------- #
 target_metadata = Base.metadata
 
-# This is also new: Set the sqlalchemy.url from environment variables
-load_dotenv() # Load .env file
+# Set the sqlalchemy.url from environment variables
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.venv')
+load_dotenv(dotenv_path=dotenv_path)
 db_url = os.getenv("DATABASE_URL") # Or build it from individual DB_ parts
 if not db_url:
     # Try to build from individual parts
@@ -37,17 +32,16 @@ if not db_url:
     db_port = os.getenv("DB_PORT")
     db_name = os.getenv("DB_NAME")
     if all([db_user, db_password, db_host, db_port, db_name]):
-        db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        if 'neon.tech' in db_host:
+            endpoint_id = db_host.split('.')[0]
+            db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?sslmode=require&options=endpoint%3D{endpoint_id}"
+        else:
+            db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 if not db_url:
     raise ValueError("DATABASE_URL environment variable not set, or DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME are not all set.")
 
 config.set_main_option("sqlalchemy.url", db_url)
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline():

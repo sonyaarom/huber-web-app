@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # --------------------------------------------------------------------------
     embedding_model: str = Field(env='EMBEDDING_MODEL', default='text-embedding-3-large')
     embedding_method: str = Field(env='EMBEDDING_METHOD', default='openai')
-    table_name: str = Field(env='TABLE_NAME', default='page_embeddings_alpha')
+    table_name: str = Field(env='TABLE_NAME', default='page_embeddings_a')
     top_k: int = Field(env='TOP_K', default=10)
     threshold: Optional[float] = Field(env='THRESHOLD', default=0.5)
 

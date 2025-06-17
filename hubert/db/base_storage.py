@@ -67,12 +67,12 @@ class BaseStorage(ABC):
         pass
 
     @abstractmethod
-    def keyword_search(self, query_text: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def keyword_search(self, query_text: str, limit: int = 5, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Perform a full-text search."""
         pass
 
     @abstractmethod
-    def vector_search(self, table_name: str, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+    def vector_search(self, table_name: str, query_embedding: List[float], limit: int = 5, filters: Dict[str, Any] = None, threshold: float = None) -> List[Dict[str, Any]]:
         """Perform a vector similarity search."""
         pass
     
