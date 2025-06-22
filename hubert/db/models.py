@@ -1,5 +1,6 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Index
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Index, LargeBinary
 from sqlalchemy.dialects.postgresql import TSVECTOR
+from flask_login import UserMixin
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector # Import the Vector type
@@ -69,3 +70,13 @@ class FailedJob(Base):
     job_id = Column(Integer, primary_key=True)
     uid = Column(Text, nullable=False, index=True)
     job_type = Column(Text, nullable=False) 
+
+class User(UserMixin, Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    username = Column(String(150), unique=True, nullable=False)
+    password_hash = Column(String(256), nullable=False)
+    role = Column(String(50), nullable=False, default='user')  # 'user' or 'admin'
+
+    def is_admin(self):
+        return self.role == 'admin'

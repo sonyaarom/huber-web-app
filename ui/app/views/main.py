@@ -1,9 +1,12 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
+from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from hubert.db.models import User
+from hubert.db.postgres_storage import PostgresStorage
 from hubert.config import settings, reload_settings
 from hubert.main import rag_main_func, retrieve_urls as get_urls, reinitialize_retriever
 from hubert.common.utils.ner_utils import extract_entities
 from flask_socketio import emit
-from ui.app import socketio
 import sys
 import os
 import logging
@@ -35,25 +38,60 @@ def chat():
 def search():
     return render_template('search.html')
 
+@bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.chat'))
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        storage = PostgresStorage()
+        user = storage.get_user_by_username(username)
+        
+        if user:
+            flash('Username already exists.', 'danger')
+            return redirect(url_for('main.register'))
+        
+        new_user = User(
+            username=username,
+            password_hash=generate_password_hash(password, method='pbkdf2:sha256'),
+            role='user'
+        )
+        storage.add_user(new_user)
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('main.login'))
+        
+    return render_template('register.html')
+
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.chat'))
     if request.method == 'POST':
+        username = request.form.get('username')
         password = request.form.get('password')
-        if password == settings.admin_password:
-            session['logged_in'] = True
-            flash('Login successful!', 'success')
-            return redirect(url_for('main.config'))
-        else:
-            flash('Incorrect password.', 'danger')
+        remember = True if request.form.get('remember') else False
+        
+        storage = PostgresStorage()
+        user = storage.get_user_by_username(username)
+        
+        if not user or not check_password_hash(user.password_hash, password):
+            flash('Please check your login details and try again.', 'danger')
+            return redirect(url_for('main.login'))
+            
+        login_user(user, remember=remember)
+        return redirect(url_for('main.chat'))
+
     return render_template('login.html')
 
 @bp.route('/logout')
+@login_required
 def logout():
-    session.pop('logged_in', None)
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('main.login'))
+    logout_user()
+    return redirect(url_for('main.index'))
 
-@socketio.on('message')
+# SocketIO event handlers will be registered in the main app
 def handle_message(message):
     logger.info(f"Received message: {message}")
     try:
@@ -102,12 +140,14 @@ def retrieve_urls_endpoint():
     
 
 @bp.route('/config', methods=['GET', 'POST'])
+@login_required
 def config():
     """
     Route to display and update application configuration.
     """
-    if not session.get('logged_in'):
-        return redirect(url_for('main.login'))
+    if not current_user.is_admin():
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('main.chat'))
         
     # Define the env file name and path
     env_file = '.venv'

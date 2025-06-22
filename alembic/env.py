@@ -41,7 +41,11 @@ if not db_url:
 if not db_url:
     raise ValueError("DATABASE_URL environment variable not set, or DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME are not all set.")
 
-config.set_main_option("sqlalchemy.url", db_url)
+# Set the database URL directly in the config to avoid configparser interpolation issues
+# with URL-encoded characters like %3D
+# Escape % characters to prevent configparser interpolation
+escaped_db_url = db_url.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", escaped_db_url)
 
 
 def run_migrations_offline():
