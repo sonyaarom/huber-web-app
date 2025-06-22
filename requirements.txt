@@ -1,38 +1,57 @@
-trafilatura
+# Web scraping and content extraction
+trafilatura>=2.0.0
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
-huggingface-hub
-langchain
-langchain-community
-langchain-core
-langchain-experimental
-langchain-openai
-langchain-text-splitters
-langsmith
-numpy
-openai
-pandas
-psycopg2
-pydantic
-pydantic-settings
-pydantic_core
-python-dateutil
-python-dotenv
-requests
-spacy
-SQLAlchemy
-tiktoken
-tokenizers
-torch
-tqdm
-transformers
-urllib3
-flask
-flask_socketio
-langfuse
-together 
-sentence-transformers
-uvicorn
-fastapi
-psycopg2-binary
-alembic
-pgvector
+
+# AI and ML libraries
+huggingface-hub>=0.33.0
+langchain>=0.3.26
+langchain-community>=0.3.26
+langchain-core>=0.3.66
+langchain-experimental>=0.3.4
+langchain-openai>=0.3.24
+langchain-text-splitters>=0.3.8
+langsmith>=0.4.1
+openai>=1.90.0
+together>=1.4.6
+sentence-transformers>=4.1.0
+transformers>=4.52.4
+torch>=2.0.0
+tokenizers>=0.15.0
+tiktoken>=0.5.0
+
+# Data processing
+numpy>=1.24.0,<2.0.0
+pandas>=2.3.0
+scikit-learn>=1.3.0
+
+# Database
+psycopg2-binary>=2.9.7
+pgvector>=0.4.1
+SQLAlchemy>=2.0.41
+alembic>=1.16.2
+
+# Configuration and utilities
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+pydantic_core>=2.0.0
+python-dateutil>=2.8.0
+python-dotenv>=1.1.0
+requests>=2.31.0
+urllib3>=2.5.0
+
+# NLP
+spacy>=3.7.0,<3.8.0
+
+# Web framework
+flask>=3.1.1
+flask_socketio>=5.5.1
+Flask-Login>=0.6.0
+uvicorn>=0.34.3
+fastapi>=0.115.13
+
+# Utilities
+tqdm>=4.67.1
+tenacity>=8.2.0
+
+# Monitoring
+langfuse>=3.0.3

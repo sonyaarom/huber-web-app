@@ -7,6 +7,8 @@ from urllib.parse import quote_plus
 from hubert.db.base_storage import BaseStorage
 from hubert.config import settings
 from psycopg2 import pool
+from werkzeug.security import generate_password_hash, check_password_hash
+from hubert.db.models import User
 
 class PostgresStorage(BaseStorage):
     """Concrete implementation of the BaseStorage interface for PostgreSQL."""
@@ -349,3 +351,26 @@ class PostgresStorage(BaseStorage):
             conn.commit()
             
         return total_deleted
+
+    def get_user_by_username(self, username):
+        """Fetches a user by their username."""
+        query = "SELECT id, username, password_hash, role FROM users WHERE username = %s"
+        result = self._execute_query(query, (username,), fetch='one')
+        if result:
+            return User(id=result[0], username=result[1], password_hash=result[2], role=result[3])
+        return None
+
+    def get_user_by_id(self, user_id):
+        """Fetches a user by their ID."""
+        query = "SELECT id, username, password_hash, role FROM users WHERE id = %s"
+        result = self._execute_query(query, (user_id,), fetch='one')
+        if result:
+            return User(id=result[0], username=result[1], password_hash=result[2], role=result[3])
+        return None
+
+    def add_user(self, user):
+        """Creates a new user in the database."""
+        query = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s) RETURNING id"
+        params = (user.username, user.password_hash, user.role)
+        result = self._execute_query(query, params, fetch='one', commit=True)
+        return result[0] if result else None
