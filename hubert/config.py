@@ -1,5 +1,5 @@
 import os
-from pydantic import Field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Union, Dict
 from dotenv import load_dotenv
