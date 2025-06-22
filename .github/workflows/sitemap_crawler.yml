@@ -81,7 +81,7 @@ jobs:
           echo "| Errors | **$ERRORS** |" >> $GITHUB_STEP_SUMMARY
           
       - name: Commit metrics history
-        if: success() # Only commit if the job was successful
+        if: success()
         run: |
           # Create a directory for today's metrics
           METRICS_DIR="metrics/$(date +'%Y-%m-%d')"
@@ -108,6 +108,10 @@ jobs:
           # Commit the changes back to the repository
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Pull the latest changes before committing
+          git pull
+          
           git add metrics/ metrics_history.csv
           # Only commit and push if there are actual changes
           git diff --quiet && git diff --staged --quiet || (git commit -m "📊 Update crawler metrics for $TODAY" && git push)
