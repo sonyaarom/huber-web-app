@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     db_username: str = Field(env='DB_USERNAME', default='postgres')
     db_password: str = Field(env='DB_PASSWORD', default='password')
 
+    @computed_field
+    @property
+    def DATABASE_URL(self) -> str:
+        """
+        Constructs the full database URL from individual components.
+        """
+        return f"postgresql+psycopg2://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+
     # --------------------------------------------------------------------------
     # API Keys
     # --------------------------------------------------------------------------
