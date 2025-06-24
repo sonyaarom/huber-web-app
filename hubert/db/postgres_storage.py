@@ -2,13 +2,19 @@ import psycopg2
 import numpy as np
 from psycopg2.extras import execute_values, Json
 from pgvector.psycopg2 import register_vector
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from urllib.parse import quote_plus
 from hubert.db.base_storage import BaseStorage
 from hubert.config import settings
 from psycopg2 import pool
 from werkzeug.security import generate_password_hash, check_password_hash
 from hubert.db.models import User
+from datetime import datetime, timedelta
+import json
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class PostgresStorage(BaseStorage):
     """Concrete implementation of the BaseStorage interface for PostgreSQL."""
@@ -33,39 +39,35 @@ class PostgresStorage(BaseStorage):
         finally:
             self.pool.putconn(conn)
 
-    def _build_dsn(self, db_params: Dict[str, Any]) -> str:
-        """Builds the DSN string for psycopg2."""
-        host = db_params.get("host")
-        if host and 'neon.tech' in host:
-            endpoint_id = host.split('.')[0]
-            options = f"endpoint%3D{endpoint_id}"
-
-            user = quote_plus(db_params.get('user'))
-            password = quote_plus(db_params.get('password'))
-            
-            return (
-                f"postgresql://{user}:{password}@"
-                f"{host}:{db_params.get('port')}/{db_params.get('dbname')}"
-                f"?sslmode=require&options={options}"
-            )
-        
-        # Fallback to the original DSN format for non-Neon DBs
+    @staticmethod
+    def _build_dsn(db_params: Dict[str, Any]) -> str:
+        """Build the data source name (DSN) for PostgreSQL connection."""
+        encoded_password = quote_plus(str(db_params['password']))
         return (
-            f"host={db_params.get('host')} "
-            f"port={db_params.get('port')} "
-            f"dbname={db_params.get('dbname')} "
-            f"user={db_params.get('user')} "
-            f"password={db_params.get('password')}"
+            f"host={db_params['host']} "
+            f"port={db_params['port']} "
+            f"dbname={db_params['dbname']} "
+            f"user={db_params['user']} "
+            f"password={encoded_password}"
         )
-
-    def close(self):
-        """Close the database connection pool."""
-        if self.pool:
-            self.pool.closeall()
 
     def connect(self):
         """Establish a connection to the data store."""
-        return self.pool.getconn()
+        # Connection is managed by the pool, so this is a no-op
+        pass
+
+    def close(self):
+        """Close the connection to the data store."""
+        self.close_pool()
+
+    def close_pool(self):
+        """Close all connections in the pool."""
+        if hasattr(self, 'pool') and self.pool:
+            self.pool.closeall()
+
+    def __del__(self):
+        """Cleanup method to close connections when the object is destroyed."""
+        self.close_pool()
 
     def _execute_query(self, query: str, params: Tuple = None, fetch: str = None, commit=False):
         """Helper function to execute a query using a connection from the pool."""
@@ -395,3 +397,430 @@ class PostgresStorage(BaseStorage):
         """
         result = self._execute_query(query, fetch='all')
         return [row[0] for row in result] if result else []
+
+    def upsert_raw_pages(self, records: List[Dict[str, Any]]):
+        """Insert or update raw page metadata (URL, last_modified)."""
+        upsert_query = """
+            INSERT INTO page_raw (id, url, last_updated, is_active) 
+            VALUES %s
+            ON CONFLICT (id) DO UPDATE SET
+                url = EXCLUDED.url,
+                last_updated = EXCLUDED.last_updated,
+                is_active = EXCLUDED.is_active,
+                last_scraped = EXCLUDED.last_scraped;
+        """
+        values = [(r['id'], r['url'], r['last_updated'], r.get('is_active', True)) for r in records]
+
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cursor:
+                execute_values(cursor, upsert_query, values, page_size=100)
+            conn.commit()
+        finally:
+            if conn:
+                self.pool.putconn(conn)
+
+    def deactivate_old_urls(self, current_ids: List[str]) -> List[str]:
+        """Mark URLs no longer present in the sitemap as inactive."""
+        if not current_ids:
+            return []
+            
+        query = """
+            UPDATE page_raw 
+            SET is_active = FALSE 
+            WHERE id NOT IN %s AND is_active = TRUE
+            RETURNING id;
+        """
+        
+        result = self._execute_query(query, (tuple(current_ids),), fetch='all', commit=True)
+        return [row[0] for row in result] if result else []
+
+    def upsert_keywords(self, keyword_records: List[Dict[str, Any]]):
+        """Insert or update tsvector keywords for content."""
+        upsert_query = """
+            INSERT INTO page_keywords (id, uid, last_modified, tokenized_text, raw_text) 
+            VALUES %s
+            ON CONFLICT (id) DO UPDATE SET
+                uid = EXCLUDED.uid,
+                last_modified = EXCLUDED.last_modified,
+                tokenized_text = EXCLUDED.tokenized_text,
+                raw_text = EXCLUDED.raw_text,
+                last_scraped = EXCLUDED.last_scraped;
+        """
+        
+        values = []
+        for r in keyword_records:
+            values.append((
+                r['id'], r['uid'], r['last_modified'], 
+                r['tokenized_text'], r['raw_text']
+            ))
+
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cursor:
+                execute_values(cursor, upsert_query, values, page_size=100)
+            conn.commit()
+        finally:
+            if conn:
+                self.pool.putconn(conn)
+
+    def get_content_to_process_for_keywords(self) -> List[Tuple[str, str]]:
+        """Fetch content that needs keyword processing."""
+        query = """
+            SELECT pc.id, pc.extracted_content FROM page_content pc
+            LEFT JOIN page_keywords pk ON pc.id = pk.id
+            WHERE pk.id IS NULL AND pc.extracted_content IS NOT NULL;
+        """
+        return self._execute_query(query, fetch='all')
+
+    def purge_inactive_records(self):
+        """Delete all records associated with inactive URLs."""
+        with self.pool.getconn() as conn, conn.cursor() as cursor:
+            # First, get all inactive URLs
+            cursor.execute("SELECT id FROM page_raw WHERE is_active = FALSE")
+            inactive_uids = [row[0] for row in cursor.fetchall()]
+
+            if not inactive_uids:
+                return
+
+            # Delete from all related tables
+            tables_to_purge = [
+                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+            ]
+            for table in tables_to_purge:
+                # Use a placeholder for the list of UIDs
+                delete_query = f"DELETE FROM {table} WHERE id = ANY(%s)"
+                cursor.execute(delete_query, (inactive_uids,))
+            
+            conn.commit()
+
+    def log_failed_job(self, uid: str, job_type: str, error: str = ""):
+        """Log a failed job attempt."""
+        query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
+        self._execute_query(query, (uid, job_type, error), commit=True)
+
+    def purge_specific_inactive_records(self, inactive_uids: List[str]) -> int:
+        """Delete records for a specific list of inactive UIDs."""
+        if not inactive_uids:
+            return 0
+        
+        total_deleted = 0
+        with self.pool.getconn() as conn, conn.cursor() as cursor:
+            tables_to_purge = [
+                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+            ]
+            for table in tables_to_purge:
+                delete_query = f"DELETE FROM {table} WHERE id = ANY(%s) RETURNING *"
+                cursor.execute(delete_query, (inactive_uids,))
+                total_deleted += cursor.rowcount
+            conn.commit()
+            
+        return total_deleted
+
+    # New methods for feedback and analytics
+    
+    def store_user_feedback(self, feedback_data: Dict[str, Any]) -> int:
+        """Store user feedback in the database."""
+        query = """
+            INSERT INTO user_feedback (
+                session_id, user_id, query, generated_answer, prompt_used, 
+                retrieval_method, sources_urls, rating, feedback_comment, response_time_ms
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """
+        values = (
+            feedback_data.get('session_id'),
+            feedback_data.get('user_id'),
+            feedback_data.get('query'),
+            feedback_data.get('generated_answer'),
+            feedback_data.get('prompt_used'),
+            feedback_data.get('retrieval_method'),
+            Json(feedback_data.get('sources_urls', [])),
+            feedback_data.get('rating'),
+            feedback_data.get('feedback_comment'),
+            feedback_data.get('response_time_ms')
+        )
+        result = self._execute_query(query, values, fetch='one', commit=True)
+        return result[0] if result else None
+
+    def store_query_analytics(self, query_data: Dict[str, Any]) -> int:
+        """Store query analytics in the database."""
+        query = """
+            INSERT INTO query_analytics (
+                session_id, user_id, query, query_tokens, query_length, 
+                has_answer, response_time_ms, retrieval_method, num_sources_found
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """
+        
+        # Tokenize query for analytics
+        query_tokens = query_data.get('query', '').lower().split() if query_data.get('query') else []
+        
+        values = (
+            query_data.get('session_id'),
+            query_data.get('user_id'),
+            query_data.get('query'),
+            query_tokens,
+            len(query_data.get('query', '')),
+            query_data.get('has_answer', True),
+            query_data.get('response_time_ms'),
+            query_data.get('retrieval_method'),
+            query_data.get('num_sources_found')
+        )
+        result = self._execute_query(query, values, fetch='one', commit=True)
+        return result[0] if result else None
+
+    def store_retrieval_analytics(self, query_analytics_id: int, retrieved_results: List[Dict[str, Any]]) -> None:
+        """Store retrieval results for MRR calculation."""
+        if not retrieved_results:
+            return
+            
+        query = """
+            INSERT INTO retrieval_analytics (
+                query_analytics_id, retrieved_url, rank_position, similarity_score, is_relevant
+            ) VALUES %s;
+        """
+        
+        values = [
+            (
+                query_analytics_id,
+                result.get('url'),
+                result.get('rank_position', idx + 1),
+                result.get('similarity_score'),
+                result.get('is_relevant')  # This can be set later for training data
+            )
+            for idx, result in enumerate(retrieved_results)
+        ]
+        
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cursor:
+                execute_values(cursor, query, values, page_size=100)
+            conn.commit()
+        finally:
+            if conn:
+                self.pool.putconn(conn)
+
+    def get_feedback_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """Get feedback metrics for the dashboard."""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        queries = [
+            # Total feedback count
+            ("total_feedback", """
+                SELECT COUNT(*) as total_feedback
+                FROM user_feedback 
+                WHERE timestamp >= %s
+            """),
+            
+            # Positive vs negative feedback
+            ("feedback_distribution", """
+                SELECT rating, COUNT(*) as count
+                FROM user_feedback 
+                WHERE timestamp >= %s
+                GROUP BY rating
+            """),
+            
+            # Feedback over time (daily)
+            ("feedback_over_time", """
+                SELECT DATE(timestamp) as date, rating, COUNT(*) as count
+                FROM user_feedback 
+                WHERE timestamp >= %s
+                GROUP BY DATE(timestamp), rating
+                ORDER BY date
+            """),
+            
+            # Average response time by rating
+            ("response_time_by_rating", """
+                SELECT rating, AVG(response_time_ms) as avg_response_time
+                FROM user_feedback 
+                WHERE timestamp >= %s AND response_time_ms IS NOT NULL
+                GROUP BY rating
+            """)
+        ]
+        
+        metrics = {}
+        for metric_name, query in queries:
+            result = self._execute_query(query, (cutoff_date,), fetch='all')
+            metrics[metric_name] = result
+            
+        return metrics
+
+    def get_query_analytics_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """Get query analytics for time series and word cloud."""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        queries = [
+            # Queries per day
+            ("queries_per_day", """
+                SELECT DATE(timestamp) as date, COUNT(*) as query_count
+                FROM query_analytics 
+                WHERE timestamp >= %s
+                GROUP BY DATE(timestamp)
+                ORDER BY date
+            """),
+            
+            # Popular search terms (word cloud)
+            ("popular_terms", """
+                SELECT unnest(query_tokens) as term, COUNT(*) as frequency
+                FROM query_analytics 
+                WHERE timestamp >= %s AND query_tokens IS NOT NULL
+                GROUP BY term
+                HAVING COUNT(*) > 1
+                ORDER BY frequency DESC
+                LIMIT 100
+            """),
+            
+            # Average query length over time
+            ("avg_query_length", """
+                SELECT DATE(timestamp) as date, AVG(query_length) as avg_length
+                FROM query_analytics 
+                WHERE timestamp >= %s
+                GROUP BY DATE(timestamp)
+                ORDER BY date
+            """),
+            
+            # Retrieval method distribution
+            ("retrieval_methods", """
+                SELECT retrieval_method, COUNT(*) as count
+                FROM query_analytics 
+                WHERE timestamp >= %s AND retrieval_method IS NOT NULL
+                GROUP BY retrieval_method
+            """)
+        ]
+        
+        metrics = {}
+        for metric_name, query in queries:
+            result = self._execute_query(query, (cutoff_date,), fetch='all')
+            metrics[metric_name] = result
+            
+        return metrics
+
+    def calculate_mrr_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """Calculate Mean Reciprocal Rank (MRR) metrics."""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Get MRR calculation - for now we'll use click position as relevance indicator
+        # In the future, this can be enhanced with explicit relevance judgments
+        query = """
+            WITH ranked_results AS (
+                SELECT 
+                    qa.id,
+                    qa.query,
+                    qa.timestamp::date as date,
+                    ra.rank_position,
+                    ra.similarity_score,
+                    -- For now, we assume top 3 results are relevant, this can be improved
+                    CASE WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position ELSE 0 END as reciprocal_rank
+                FROM query_analytics qa
+                JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+                WHERE qa.timestamp >= %s
+            ),
+            mrr_by_query AS (
+                SELECT 
+                    id,
+                    query,
+                    date,
+                    MAX(reciprocal_rank) as max_reciprocal_rank
+                FROM ranked_results
+                GROUP BY id, query, date
+            )
+            SELECT 
+                date,
+                AVG(max_reciprocal_rank) as mrr,
+                COUNT(*) as query_count
+            FROM mrr_by_query
+            GROUP BY date
+            ORDER BY date;
+        """
+        
+        mrr_results = self._execute_query(query, (cutoff_date,), fetch='all')
+        
+        # Overall MRR
+        overall_mrr_query = """
+            WITH ranked_results AS (
+                SELECT 
+                    qa.id,
+                    CASE WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position ELSE 0 END as reciprocal_rank
+                FROM query_analytics qa
+                JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+                WHERE qa.timestamp >= %s
+            ),
+            mrr_by_query AS (
+                SELECT 
+                    id,
+                    MAX(reciprocal_rank) as max_reciprocal_rank
+                FROM ranked_results
+                GROUP BY id
+            )
+            SELECT AVG(max_reciprocal_rank) as overall_mrr
+            FROM mrr_by_query;
+        """
+        
+        overall_mrr = self._execute_query(overall_mrr_query, (cutoff_date,), fetch='one')
+        
+        return {
+            'mrr_over_time': mrr_results,
+            'overall_mrr': overall_mrr[0] if overall_mrr and overall_mrr[0] else 0
+        }
+
+    def get_preference_dataset(self) -> List[Dict]:
+        """Export preference dataset for RLHF/DPO training."""
+        query = """
+        SELECT 
+            uf.query,
+            uf.generated_answer,
+            uf.rating,
+            uf.feedback_comment,
+            uf.sources_urls,
+            uf.prompt_used,
+            uf.retrieval_method,
+            uf.response_time_ms,
+            uf.timestamp
+        FROM user_feedback uf
+        ORDER BY uf.timestamp DESC
+        """
+        
+        results = self._execute_query(query, fetch='all')
+        
+        preference_data = []
+        for row in results:
+            preference_data.append({
+                'query': row[0],
+                'generated_answer': row[1],
+                'rating': row[2],
+                'feedback_comment': row[3],
+                'sources_urls': row[4],
+                'prompt_used': row[5],
+                'retrieval_method': row[6],
+                'response_time_ms': row[7],
+                'timestamp': row[8].isoformat() if row[8] else None
+            })
+        
+        return preference_data
+
+    def update_retrieval_relevance(self, query_analytics_id: int, url: str, rank_position: int, is_relevant: bool):
+        """Update relevance information for a specific retrieval result."""
+        query = """
+        UPDATE retrieval_analytics 
+        SET is_relevant = %s, timestamp = CURRENT_TIMESTAMP
+        WHERE query_analytics_id = %s AND retrieved_url = %s AND rank_position = %s
+        """
+        
+        self._execute_query(query, (is_relevant, query_analytics_id, url, rank_position))
+        logger.info(f"Updated relevance for URL {url} at rank {rank_position}: {is_relevant}")
+
+    def get_query_analytics_by_session_query(self, session_id: str, query: str) -> Optional[int]:
+        """Find existing query analytics ID by session and query."""
+        sql_query = """
+        SELECT id FROM query_analytics 
+        WHERE session_id = %s AND query = %s 
+        ORDER BY timestamp DESC 
+        LIMIT 1
+        """
+        
+        result = self._execute_query(sql_query, (session_id, query), fetch='one')
+        return result[0] if result else None

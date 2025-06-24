@@ -46,13 +46,73 @@
         .dark-mode .search-results { background-color: #3d3d3d; border-color: #4a4a4a; }
         .search-results h3 { color: #0b3d91; margin-bottom: 20px; font-weight: 600; }
         .dark-mode .search-results h3 { color: #ffffff; }
-        .url-list { list-style-type: none; padding-left: 0; }
-        .url-list li { margin-bottom: 15px; padding: 15px; background-color: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); transition: transform 0.3s; }
-        .dark-mode .url-list li { background-color: #2d2d2d; }
-        .url-list li:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
-        .url-list a { color: #0b3d91; text-decoration: none; font-weight: 500; display: block; word-break: break-all; }
-        .dark-mode .url-list a { color: #7aa6ff; }
-        .url-list a:hover { text-decoration: underline; }
+        .url-list { padding-left: 0; }
+        /* Source item styling for feedback */
+        .source-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+            margin-bottom: 15px;
+        }
+        .dark-mode .source-item {
+            background-color: #2d2d2d;
+        }
+        .source-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .source-link {
+            flex: 1;
+            margin-right: 15px;
+        }
+        .source-link a {
+            color: #0b3d91;
+            text-decoration: none;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            word-break: break-all;
+        }
+        .dark-mode .source-link a {
+            color: #7aa6ff;
+        }
+        .source-link a:hover {
+            text-decoration: underline;
+        }
+        .source-feedback {
+            display: flex;
+            gap: 10px;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+        .source-item:hover .source-feedback {
+            opacity: 1;
+        }
+        .source-thumb {
+            cursor: pointer;
+            color: #6c757d;
+            font-size: 16px;
+            transition: color 0.3s ease, transform 0.2s ease;
+            padding: 5px;
+        }
+        .source-thumb:hover {
+            transform: scale(1.2);
+        }
+        .source-thumb.active {
+            transform: scale(1.2);
+        }
+        .source-thumb[data-source-feedback="relevant"].active {
+            color: #28a745;
+        }
+        .source-thumb[data-source-feedback="not-relevant"].active {
+            color: #dc3545;
+        }
         .footer { background-color: #f0f2f5; padding: 20px; text-align: center; color: #666; font-size: 14px; border-top: 1px solid #ddd; margin-top: 50px; }
         .dark-mode .footer { background-color: #1a1a1a; color: #cccccc; border-color: #4a4a4a; }
         /* Additional styling for formatted markdown output */
@@ -293,7 +353,7 @@
         
         <div id="search-results" class="search-results">
             <h3>Search Results</h3>
-            <ul id="url-list" class="url-list"></ul>
+            <div id="url-list" class="url-list"></div>
         </div>
         
         <!-- Container for Formatted Model Output -->
@@ -380,7 +440,7 @@
                 $('#formatted-output').empty();
                 
                 // Show loading indicators
-                $('#url-list').html('<li>Searching for relevant sources...</li>');
+                $('#url-list').html('<div class="loading">Searching for relevant sources...</div>');
                 $('#formatted-output').html('<p>Retrieving answer...</p>');
                 $('#search-results').show();
                 
@@ -392,11 +452,25 @@
                     success: function(response) {
                         $('#url-list').empty();
                         if (response.urls && response.urls.length > 0) {
-                            response.urls.forEach(function(url) {
-                                $('#url-list').append(`<li><a href="${url}" target="_blank">${url}</a></li>`);
+                            response.urls.forEach(function(url, index) {
+                                var shortUrl = url.length > 80 ? url.substring(0, 80) + '...' : url;
+                                var sourceHtml = `
+                                    <div class="source-item" data-url="${url}" data-rank="${index + 1}" data-query="${question}">
+                                        <div class="source-link">
+                                            <a href="${url}" target="_blank" rel="noopener noreferrer">
+                                                <i class="fas fa-external-link-alt"></i> ${shortUrl}
+                                            </a>
+                                        </div>
+                                        <div class="source-feedback">
+                                            <i class="fas fa-thumbs-up source-thumb" data-source-feedback="relevant" title="Mark as relevant"></i>
+                                            <i class="fas fa-thumbs-down source-thumb" data-source-feedback="not-relevant" title="Mark as not relevant"></i>
+                                        </div>
+                                    </div>
+                                `;
+                                $('#url-list').append(sourceHtml);
                             });
                         } else {
-                            $('#url-list').html('<li>No relevant sources found. Try a different question.</li>');
+                            $('#url-list').html('<div class="no-results">No relevant sources found. Try a different question.</div>');
                         }
                         
                         // Handle the answer
@@ -410,7 +484,7 @@
                         $('#formatted-output').html(htmlContent);
                     },
                     error: function(error) {
-                        $('#url-list').html('<li>Error retrieving sources. Please try again.</li>');
+                        $('#url-list').html('<div class="error">Error retrieving sources. Please try again.</div>');
                         $('#formatted-output').html('<p>Error retrieving answer. Please try again.</p>');
                         console.error('Error retrieving data:', error);
                     }
@@ -422,6 +496,65 @@
                 e.preventDefault();
                 $('#loginModal').modal('hide');
                 alert('Login functionality will be implemented soon!');
+            });
+            
+            // Handle source feedback clicks
+            $(document).on('click', '.source-thumb', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var sourceFeedback = $(this).attr('data-source-feedback');
+                var sourceItem = $(this).closest('.source-item');
+                var url = sourceItem.attr('data-url');
+                var rank = parseInt(sourceItem.attr('data-rank'));
+                var query = sourceItem.attr('data-query');
+                
+                // Toggle active state
+                $(this).toggleClass('active');
+                
+                // Remove active state from the other source feedback button
+                var otherButton = sourceItem.find(`.source-thumb[data-source-feedback="${sourceFeedback === 'relevant' ? 'not-relevant' : 'relevant'}"]`);
+                otherButton.removeClass('active');
+                
+                // Determine relevance based on feedback
+                var isRelevant = sourceFeedback === 'relevant' && $(this).hasClass('active');
+                
+                // Prepare source feedback data
+                var sourceFeedbackData = {
+                    query: query,
+                    url: url,
+                    rank_position: rank,
+                    is_relevant: isRelevant,
+                    feedback_type: 'search_source_relevance',
+                    session_id: 'search-session-' + Date.now() // Generate a session ID for search
+                };
+                
+                // Send source feedback to backend
+                $.ajax({
+                    type: 'POST',
+                    url: '/submit_search_source_feedback',
+                    data: JSON.stringify(sourceFeedbackData),
+                    contentType: 'application/json',
+                    success: function(data) {
+                        if (data.success) {
+                            console.log('Source feedback submitted successfully:', data.message);
+                            // Show visual feedback
+                            var button = sourceItem.find(`.source-thumb[data-source-feedback="${sourceFeedback}"]`);
+                            button.css('color', isRelevant ? '#28a745' : '#dc3545');
+                            button.css('transform', 'scale(1.2)');
+                            setTimeout(function() {
+                                button.css('transform', 'scale(1)');
+                            }, 200);
+                        } else {
+                            console.error('Source feedback submission failed:', data.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error submitting source feedback:', error);
+                        // Show error feedback
+                        alert('Error submitting feedback. Please try again.');
+                    }
+                });
             });
 
             // Settings Panel Functionality
