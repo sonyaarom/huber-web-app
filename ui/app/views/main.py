@@ -286,7 +286,7 @@ def logout():
 @bp.route('/evaluation')
 @login_required
 def evaluation_dashboard():
-    if not current_user.is_admin():
+    if not current_user.is_admin:
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('main.chat'))
     return render_template('evaluation.html')
@@ -345,7 +345,7 @@ def config():
     """
     Route to display and update application configuration.
     """
-    if not current_user.is_admin():
+    if not current_user.is_admin:
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('main.chat'))
         
