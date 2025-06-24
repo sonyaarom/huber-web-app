@@ -7,6 +7,7 @@
   <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+  
   <style>
     body, html { height: 100%; margin: 0; font-family: 'Poppins', sans-serif; background-color: #f0f2f5; }
     body.dark-mode { background-color: #1a1a1a; color: #ffffff; }
@@ -20,8 +21,8 @@
     .main { flex: 1; display: flex; flex-direction: column; max-width: 1000px; margin: 0 auto; position: relative; }
     #user-icon { background-color: rgba(255, 255, 255, 0.1); border-radius: 10px; margin-bottom: 10px; }
     #user-icon:hover { background-color: rgba(255, 255, 255, 0.2); }
-    {% block style %}{% endblock %}
   </style>
+  {% block style %}{% endblock %}
 </head>
 <body class="{{ 'dark-mode' if session.get('dark-mode') else '' }}">
   <div class="wrapper">
@@ -37,7 +38,7 @@
         <a href="{{ url_for('main.config') }}" class="sidebar-icon" title="Configuration">
             <i class="fas fa-cogs"></i><span class="sidebar-text">Configuration</span>
         </a>
-        <a href="{{ url_for('main.evaluation_dashboard') }}" class="sidebar-icon" title="Evaluation">
+        <a href="{{ url_for('evaluation.dashboard') }}" class="sidebar-icon" title="Evaluation">
             <i class="fas fa-chart-bar"></i><span class="sidebar-text">Evaluation</span>
         </a>
         {% endif %}

@@ -55,3 +55,7 @@ tenacity>=8.2.0
 
 # Monitoring
 langfuse>=3.0.3
+wandb
+
+# Evaluation metrics
+rouge_score>=0.1.2

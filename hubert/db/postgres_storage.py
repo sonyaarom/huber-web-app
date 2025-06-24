@@ -373,8 +373,25 @@ class PostgresStorage(BaseStorage):
         return None
 
     def add_user(self, user):
-        """Creates a new user in the database."""
-        query = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s) RETURNING id"
-        params = (user.username, user.password_hash, user.role)
-        result = self._execute_query(query, params, fetch='one', commit=True)
-        return result[0] if result else None
+        """Add a user to the database."""
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cursor:
+                cursor.execute("INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s)", 
+                             (user.username, user.password_hash, user.is_admin))
+            conn.commit()
+        finally:
+            if conn:
+                self.pool.putconn(conn)
+
+    def get_embedding_tables(self) -> List[str]:
+        """Get all table names starting with 'page_embeddings'."""
+        query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name LIKE 'page_embeddings%'
+            ORDER BY table_name;
+        """
+        result = self._execute_query(query, fetch='all')
+        return [row[0] for row in result] if result else []

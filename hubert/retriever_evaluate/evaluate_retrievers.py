@@ -21,7 +21,7 @@ except ImportError:
     logging.warning("sentence-transformers not installed. Reranking will not be available.")
 
 # Import local modules
-from .config import settings
+from hubert.config import settings
 from hubert.common.utils.embedding_utils import EmbeddingGenerator
 from .utils.metrics import calculate_mrr, calculate_hit_at_k
 
