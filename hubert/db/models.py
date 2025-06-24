@@ -78,5 +78,9 @@ class User(UserMixin, Base):
     password_hash = Column(String(256), nullable=False)
     role = Column(String(50), nullable=False, default='user')  # 'user' or 'admin'
 
+    @property
     def is_admin(self):
         return self.role == 'admin'
+
+    def __repr__(self):
+        return f'<User {self.username}>'

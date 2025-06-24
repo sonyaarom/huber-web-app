@@ -3,6 +3,7 @@ import logging
 from functools import wraps
 from flask import render_template, request, jsonify, flash, redirect, url_for, session, abort
 from flask_login import login_user, logout_user, current_user, login_required
+from werkzeug.security import check_password_hash, generate_password_hash
 from ui.app import app # Import the app instance
 from hubert.db.postgres_storage import PostgresStorage
 from hubert.db.models import User
@@ -16,9 +17,21 @@ from hubert.generator.prompt_utils.prompt_templates import PromptFactory
 from hubert.generator.prompt_utils.config import settings
 from hubert.main import retrieve_urls as retrieve_urls_main
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging properly for Flask app
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True  # This forces reconfiguration even if basicConfig was called elsewhere
+)
+
+# Get the logger for this module
 logger = logging.getLogger(__name__)
+
+# Also configure the app logger
+app.logger.setLevel(logging.INFO)
+
+# Ensure our logger messages appear
+logger.info("=== ROUTES MODULE LOADED ===")
 
 # Initialize models globally
 try:
@@ -50,14 +63,25 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        logger.info(f"Login attempt for username: {username}")
+        
         storage = PostgresStorage()
         user_data = storage.get_user_by_username(username)
-        user = User(id=user_data.id, username=user_data.username, password_hash=user_data.password_hash, role=user_data.role) if user_data else None
-
-        if user is None or not user.check_password(password):
+        
+        if user_data is None:
+            logger.warning(f"User not found: {username}")
             flash('Invalid username or password', 'danger')
             return redirect(url_for('login'))
-        login_user(user, remember=True)
+        
+        logger.info(f"User found: {user_data.username}, role: {user_data.role}")
+        
+        if not check_password_hash(user_data.password_hash, password):
+            logger.warning(f"Invalid password for user: {username}")
+            flash('Invalid username or password', 'danger')
+            return redirect(url_for('login'))
+        
+        logger.info(f"Password verified for user: {username}")
+        login_user(user_data, remember=True)
         flash('Logged in successfully!', 'success')
         return redirect(url_for('index'))
     return render_template('login.html', title='Sign In')
@@ -78,7 +102,12 @@ def register():
         if storage.get_user_by_username(username):
             flash('Username already exists.', 'warning')
             return redirect(url_for('register'))
-        storage.create_user(username, password, role='user')
+        
+        # Create user with hashed password
+        password_hash = generate_password_hash(password)
+        user = User(username=username, password_hash=password_hash, role='user')
+        storage.add_user(user)
+        
         flash('Congratulations, you are now a registered user!', 'success')
         return redirect(url_for('login'))
     return render_template('register.html', title='Register')
