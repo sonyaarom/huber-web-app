@@ -74,12 +74,16 @@ class PostgresStorage(BaseStorage):
             conn = self.pool.getconn()
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
+                result = None
                 if fetch == 'one':
-                    return cursor.fetchone()
-                if fetch == 'all':
-                    return cursor.fetchall()
+                    result = cursor.fetchone()
+                elif fetch == 'all':
+                    result = cursor.fetchall()
+                
                 if commit:
                     conn.commit()
+                
+                return result
         except psycopg2.Error as e:
             # In case of an error, rollback and re-raise
             if conn:

@@ -8,628 +8,75 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <style>
-        body, html {
-            height: 100%;
-            margin: 0;
-            font-family: 'Poppins', sans-serif;
-            background-color: #f0f2f5;
-            transition: background-color 0.3s ease;
-        }
-
-        body.dark-mode {
-            background-color: #1a1a1a;
-            color: #ffffff;
-        }
-        
-        .navbar {
-            background-color: #0b3d91;
-            padding: 15px 20px;
-        }
-        
-        .navbar-brand {
-            color: white;
-            font-weight: 600;
-            font-size: 24px;
-        }
-        
-        .navbar-brand img {
-            height: 40px;
-            margin-right: 10px;
-        }
-
-        .navbar-nav {
-            display: flex;
-            align-items: center;
-        }
-
-        .nav-link {
-            color: rgba(255, 255, 255, 0.8);
-            margin: 0 15px;
-            transition: color 0.3s;
-        }
-
-        .nav-link:hover {
-            color: white;
-            text-decoration: none;
-        }
-        
-        .login-section {
-            margin-left: auto;
-        }
-        
-        .login-btn {
-            background-color: transparent;
-            border: 2px solid white;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            transition: all 0.3s ease;
-        }
-        
-        .login-btn:hover {
-            background-color: white;
-            color: #0b3d91;
-        }
-        
-        .main-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: calc(100vh - 80px);
-            padding: 20px;
-            text-align: center;
-        }
-
-        .dark-mode .main-container {
-            background-color: #1a1a1a;
-        }
-        
-        .welcome-section {
-            margin-bottom: 60px;
-        }
-        
-        .welcome-section h1 {
-            color: #0b3d91;
-            font-size: 48px;
-            font-weight: 700;
-            margin-bottom: 20px;
-        }
-
-        .dark-mode .welcome-section h1 {
-            color: #ffffff;
-        }
-        
-        .welcome-section p {
-            color: #555;
-            font-size: 18px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .dark-mode .welcome-section p {
-            color: #cccccc;
-        }
-        
-        .options-container {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            margin-top: 40px;
-        }
-        
-        .option-card {
-            background-color: white;
-            border-radius: 15px;
-            padding: 30px;
-            width: 300px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            text-align: center;
-        }
-
-        .dark-mode .option-card {
-            background-color: #2d2d2d;
-        }
-        
-        .option-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-        }
-        
-        .option-icon {
-            font-size: 48px;
-            color: #0b3d91;
-            margin-bottom: 20px;
-        }
-
-        .dark-mode .option-icon {
-            color: #7aa6ff;
-        }
-        
-        .option-card h3 {
-            color: #0b3d91;
-            font-weight: 600;
-            margin-bottom: 15px;
-        }
-
-        .dark-mode .option-card h3 {
-            color: #ffffff;
-        }
-        
-        .option-card p {
-            color: #666;
-            margin-bottom: 15px;
-        }
-
-        .dark-mode .option-card p {
-            color: #cccccc;
-        }
-        
-        .option-btn {
-            background-color: #0b3d91;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .option-btn:hover {
-            background-color: #082d6e;
-            transform: scale(1.05);
-        }
-        
-        .footer {
-            background-color: #f0f2f5;
-            padding: 20px;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            border-top: 1px solid #ddd;
-        }
-
-        .dark-mode .footer {
-            background-color: #1a1a1a;
-            color: #cccccc;
-            border-color: #4a4a4a;
-        }
-        
-        /* Login Modal Styles */
-        .modal-content {
-            border-radius: 15px;
-            border: none;
-        }
-        
-        .modal-header {
-            background-color: #0b3d91;
-            color: white;
-            border-radius: 15px 15px 0 0;
-        }
-        
-        .modal-title {
-            font-weight: 600;
-        }
-        
-        .close {
-            color: white;
-        }
-        
-        .form-group label {
-            font-weight: 500;
-            color: #555;
-        }
-        
-        .form-control {
-            display: block;
-            width: 100%;
-            height: calc(1.5em + .75rem + 2px);
-            padding: .375rem .75rem;
-            font-size: 1rem;
-            font-weight: 400;
-            line-height: 1.5;
-            color: #495057;
-            background-color: #fff;
-            background-clip: padding-box;
-            border: 1px solid #ced4da;
-            border-radius: .25rem;
-            transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
-        }
-        
-        .dark-mode .form-control {
-            background-color: #333;
-            color: #fff;
-            border-color: #555;
-        }
-        
-        .btn-login {
-            background-color: #0b3d91;
-            color: white;
-            border-radius: 25px;
-            padding: 10px 30px;
-            font-weight: 600;
-            border: none;
-            width: 100%;
-        }
-        
-        .btn-login:hover {
-            background-color: #082d6e;
-        }
-        
-        .forgot-password {
-            text-align: right;
-            margin-top: 10px;
-        }
-        
-        .forgot-password a {
-            color: #0b3d91;
-            text-decoration: none;
-        }
-        /* Settings Panel Styles */
-        .settings-panel {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            width: 350px;
-            min-width: 350px;
-        }
-
-        .dark-mode .settings-panel {
-            background-color: #2d2d2d;
-            color: white;
-        }
-
-        .settings-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: nowrap;
-            min-width: 280px;
-        }
-
-        .settings-item label {
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-        }
-
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: #0b3d91;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-
-        .close-btn {
-            position: absolute;
-            right: 15px;
-            top: 10px;
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
-        }
-
-        .dark-mode .close-btn {
-            color: #cccccc;
-        }
-
-        /* Fix for the font size dropdown */
-        #fontSizeSelect {
-            width: 120px;
-            min-width: 120px;
-            height: 38px; /* Ensure proper height */
-            padding: 6px 12px; /* Standard Bootstrap padding */
-            font-size: 16px; /* Ensure readable font size */
-            line-height: 1.5; /* Standard line height */
-        }
-
-        /* Reset select element styles */
-        select.form-control {
-            height: auto !important;
-            padding: 6px 12px !important;
-            box-sizing: border-box !important;
-            line-height: normal !important;
-            appearance: menulist !important;
-            -webkit-appearance: menulist !important;
-            -moz-appearance: menulist !important;
-        }
-
-        /* Custom dropdown styles */
-        .custom-dropdown {
-            position: relative;
-            display: inline-block;
-            width: 120px;
-        }
-
-        .custom-dropdown-btn {
-            background-color: white;
-            color: #333;
-            padding: 8px 16px;
-            font-size: 16px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            text-align: left;
-        }
-
-        .dark-mode .custom-dropdown-btn {
-            background-color: #333;
-            color: white;
-            border-color: #555;
-        }
-
-        .custom-dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: white;
-            min-width: 120px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .dark-mode .custom-dropdown-content {
-            background-color: #333;
-        }
-
-        .custom-dropdown-content a {
-            color: #333;
-            padding: 8px 16px;
-            text-decoration: none;
-            display: block;
-        }
-
-        .dark-mode .custom-dropdown-content a {
-            color: white;
-        }
-
-        .custom-dropdown-content a:hover {
-            background-color: #f1f1f1;
-        }
-
-        .dark-mode .custom-dropdown-content a:hover {
-            background-color: #444;
-        }
-
-        .custom-dropdown:hover .custom-dropdown-content {
-            display: block;
-        }
+        body, html { height: 100%; margin: 0; font-family: 'Poppins', sans-serif; background-color: #f0f2f5; }
+        .navbar { background-color: #0b3d91; padding: 15px 20px; }
+        .navbar-brand { color: white; font-weight: 600; font-size: 24px; }
+        .navbar-brand img { height: 40px; margin-right: 10px; }
+        .nav-link { color: rgba(255, 255, 255, 0.8); margin: 0 15px; transition: color 0.3s; }
+        .login-btn { background-color: transparent; border: 2px solid white; color: white; padding: 8px 20px; border-radius: 20px; transition: all 0.3s ease; }
+        .login-btn:hover { background-color: white; color: #0b3d91; }
+        .main-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: calc(100vh - 80px); padding: 20px; text-align: center; }
+        .welcome-section h1 { color: #0b3d91; font-size: 48px; font-weight: 700; margin-bottom: 20px; }
+        .options-container { display: flex; justify-content: center; gap: 40px; margin-top: 40px; }
+        .option-card { background-color: white; border-radius: 15px; padding: 30px; width: 300px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .option-icon { font-size: 48px; color: #0b3d91; margin-bottom: 20px; }
+        .option-card h3 { color: #0b3d91; font-weight: 600; margin-bottom: 15px; }
+        .option-btn { background-color: #0b3d91; color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; }
+        .footer { background-color: #f0f2f5; padding: 20px; text-align: center; color: #666; font-size: 14px; border-top: 1px solid #ddd; }
     </style>
 </head>
 <body>
-    <!-- Navigation Bar with Login -->
     <nav class="navbar">
-        <a class="navbar-brand" href="#">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">
             <img src="{{ url_for('static', filename='Huberlin-logo.png') }}" alt="HU Logo" onerror="this.onerror=null; this.src='https://www.hu-berlin.de/++theme++hutheme/static/images/logo.png';">
             HUBer
         </a>
-        <div class="navbar-nav">
-            <a class="nav-link" href="#" id="settings-icon">
-                <i class="fas fa-cog"></i>
-                <span>Settings</span>
-            </a>
-        </div>
-        <div class="login-section">
-            <button class="login-btn" data-toggle="modal" data-target="#loginModal">
-                <i class="fas fa-user-circle mr-2"></i> Login
-            </button>
+        <div class="ml-auto">
+            {% if current_user.is_authenticated %}
+                <div class="navbar-nav d-flex flex-row align-items-center">
+                    <span class="nav-link text-white">
+                        <i class="fas fa-user-circle mr-2"></i>
+                        {{ current_user.username }}
+                        {% if current_user.is_admin %}
+                            <small class="text-warning">(Admin)</small>
+                        {% endif %}
+                    </span>
+                    <a href="{{ url_for('main.logout') }}" class="btn login-btn ml-2">
+                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                    </a>
+                </div>
+            {% else %}
+                <a href="{{ url_for('main.login') }}" class="btn login-btn">
+                    <i class="fas fa-user-circle mr-2"></i> Login
+                </a>
+            {% endif %}
         </div>
     </nav>
-    
-    <!-- Main Content -->
     <div class="main-container">
         <div class="welcome-section">
             <h1>Welcome to HUBer</h1>
             <p>Your intelligent assistant for Humboldt University Berlin. Get answers to your questions or find relevant sources from the university's knowledge base.</p>
         </div>
-        
         <div class="options-container">
-            <!-- Chat Option -->
             <div class="option-card">
-                <div class="option-icon">
-                    <i class="fas fa-comment-dots"></i>
-                </div>
+                <div class="option-icon"><i class="fas fa-comment-dots"></i></div>
                 <h3>Chat with HUBer</h3>
                 <p>Ask questions and get instant answers about courses, professors, campus facilities, and more.</p>
                 <a href="{{ url_for('main.chat') }}" class="btn option-btn">Start Chatting</a>
             </div>
-            
-            <!-- Search Option -->
             <div class="option-card">
-                <div class="option-icon">
-                    <i class="fas fa-search"></i>
-                </div>
+                <div class="option-icon"><i class="fas fa-search"></i></div>
                 <h3>Find Sources</h3>
                 <p>Search for relevant sources, documents, and information from Humboldt University's resources.</p>
                 <a href="{{ url_for('main.search') }}" class="btn option-btn">Search Now</a>
             </div>
         </div>
     </div>
-    
-    <!-- Footer -->
     <div class="footer">
         <p>© 2025 Humboldt University Berlin. All rights reserved.</p>
-        <p>Questions, complaints, or suggestions? Contact: <strong>s.konchakova@student.hu-berlin.de</strong></p>
     </div>
-    
-    <!-- Login Modal -->
-    <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="loginModalLabel">Login to HUBer</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <form id="login-form">
-                        <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" class="form-control" id="username" placeholder="Enter your username">
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" class="form-control" id="password" placeholder="Enter your password">
-                        </div>
-                        <div class="form-group form-check">
-                            <input type="checkbox" class="form-check-input" id="rememberMe">
-                            <label class="form-check-label" for="rememberMe">Remember me</label>
-                        </div>
-                        <button type="submit" class="btn btn-login">Login</button>
-                        <div class="forgot-password">
-                            <a href="#">Forgot password?</a>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settings Panel -->
-    <div class="settings-panel" id="settings-panel">
-        <span class="close-btn" id="settings-close-btn">&times;</span>
-        <h3>Settings</h3>
-        <div class="settings-item">
-            <label for="darkModeToggle">Dark Mode</label>
-            <label class="switch">
-                <input type="checkbox" id="darkModeToggle">
-                <span class="slider"></span>
-            </label>
-        </div>
-        <div class="settings-item">
-            <label for="customFontSize">Font Size</label>
-            <div class="custom-dropdown">
-                <button class="custom-dropdown-btn" id="fontSizeBtn">Medium</button>
-                <div class="custom-dropdown-content">
-                    <a href="#" data-value="small">Small</a>
-                    <a href="#" data-value="medium">Medium</a>
-                    <a href="#" data-value="large">Large</a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Scripts -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            // Handle login form submission
-            $('#login-form').submit(function(e) {
-                e.preventDefault();
-                $('#loginModal').modal('hide');
-                alert('Login functionality will be implemented soon!');
-            });
-
-            // Settings panel functionality
-            const settingsIcon = document.getElementById('settings-icon');
-            const settingsPanel = document.getElementById('settings-panel');
-            const settingsCloseBtn = document.getElementById('settings-close-btn');
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            const fontSizeBtn = document.getElementById('fontSizeBtn');
-
-            // Apply saved settings immediately
-            if (localStorage.getItem('darkMode') === 'true') {
-                document.body.classList.add('dark-mode');
-                darkModeToggle.checked = true;
-            }
-            
-            const savedFontSize = localStorage.getItem('fontSize') || 'medium';
-            document.body.style.fontSize = savedFontSize === 'small' ? '12px' :
-                                          savedFontSize === 'medium' ? '16px' : '20px';
-            if (fontSizeBtn) {
-                fontSizeBtn.textContent = savedFontSize.charAt(0).toUpperCase() + savedFontSize.slice(1);
-            }
-            
-            settingsIcon.addEventListener('click', () => {
-                settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
-            });
-
-            settingsCloseBtn.addEventListener('click', () => {
-                settingsPanel.style.display = 'none';
-            });
-
-            darkModeToggle.addEventListener('change', () => {
-                document.body.classList.toggle('dark-mode');
-                // Save dark mode preference
-                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-            });
-
-            // Custom dropdown functionality
-            const fontSizeOptions = document.querySelectorAll('.custom-dropdown-content a');
-
-            fontSizeOptions.forEach(option => {
-                option.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const value = this.getAttribute('data-value');
-                    fontSizeBtn.textContent = this.textContent;
-                    
-                    // Apply font size
-                    document.body.style.fontSize = value === 'small' ? '12px' :
-                                                 value === 'medium' ? '16px' : '20px';
-                    
-                    // Save font size preference
-                    localStorage.setItem('fontSize', value);
-                });
-            });
-
-            // Close settings panel when clicking outside
-            document.addEventListener('click', function(event) {
-                if (!settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
-                    settingsPanel.style.display = 'none';
-                }
-            });
-        });
-    </script>
 </body>
-</html> 
+</html>
