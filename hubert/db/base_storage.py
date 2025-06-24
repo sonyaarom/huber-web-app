@@ -96,4 +96,9 @@ class BaseStorage(ABC):
     @abstractmethod
     def log_failed_job(self, uid: str, job_type: str, error: str = ""):
         """Logs a failed job to the failed_jobs table."""
+        pass
+
+    @abstractmethod
+    def get_embedding_tables(self) -> List[str]:
+        """Get all embedding table names."""
         pass 

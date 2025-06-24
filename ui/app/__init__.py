@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 logger.info("=== FLASK APP INITIALIZATION START ===")
 
 from ui.app.views.main import bp as main_blueprint
+from ui.app.evaluation import bp as evaluation_blueprint
 from hubert.db.models import User
 from hubert.db.postgres_storage import PostgresStorage
 
@@ -48,6 +49,7 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(main_blueprint)
+    app.register_blueprint(evaluation_blueprint)
 
     # Register socketio event handlers - import here to avoid circular imports
     from ui.app.views.main import handle_message

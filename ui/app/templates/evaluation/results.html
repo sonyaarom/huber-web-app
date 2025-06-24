@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1>📊 Evaluation Results</h1>
+            <p class="lead">View and analyze evaluation results from your experiments.</p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="{{ url_for('evaluation.dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Results Overview -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Recent Evaluation Runs</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5>📈 Weights & Biases Integration</h5>
+                        <p>Your evaluation results are automatically logged to Weights & Biases for comprehensive tracking and visualization.</p>
+                        <a href="https://wandb.ai" target="_blank" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> Open Weights & Biases Dashboard
+                        </a>
+                    </div>
+
+                    <div class="alert alert-secondary">
+                        <h5>📁 CSV Results</h5>
+                        <p>Detailed results are also saved as CSV files in the <code>assets/csv/evaluation_results/</code> directory.</p>
+                        <p><strong>Typical result files include:</strong></p>
+                        <ul>
+                            <li><code>eval_[prompt]_[model].csv</code> - Individual prompt/model combinations</li>
+                            <li><code>eval_all_results.csv</code> - Combined results from all runs</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Quick Actions</h4>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('evaluation.dashboard') }}" class="btn btn-success">
+                            <i class="fas fa-play"></i> Run New Evaluation
+                        </a>
+                        
+                        <a href="https://wandb.ai" target="_blank" class="btn btn-outline-primary">
+                            <i class="fas fa-chart-line"></i> View WandB Results
+                        </a>
+                        
+                        <button class="btn btn-outline-secondary" onclick="showResultsGuide()">
+                            <i class="fas fa-question-circle"></i> Results Guide
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Evaluation Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Retriever Metrics:</h6>
+                    <ul class="small">
+                        <li><strong>MRR:</strong> Mean Reciprocal Rank</li>
+                        <li><strong>Hit@K:</strong> Hit rate at K results</li>
+                        <li><strong>Retrieval Time:</strong> Average query time</li>
+                    </ul>
+                    
+                    <h6>Prompt Metrics:</h6>
+                    <ul class="small">
+                        <li><strong>ROUGE:</strong> Text overlap measures</li>
+                        <li><strong>Cosine Similarity:</strong> Semantic similarity</li>
+                        <li><strong>Quality Scores:</strong> Clarity, relevancy, factual correctness</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Guide Modal -->
+    <div class="modal fade" id="resultsGuideModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📖 Understanding Your Results</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="accordion" id="resultsAccordion">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#retrieverMetrics">
+                                        🔍 Retriever Evaluation Metrics
+                                    </button>
+                                </h6>
+                            </div>
+                            <div id="retrieverMetrics" class="collapse show" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <p><strong>Mean Reciprocal Rank (MRR):</strong> Measures how high the correct answer appears in search results. Higher is better (0-1).</p>
+                                    <p><strong>Hit@1:</strong> Percentage of queries where the correct answer is the top result.</p>
+                                    <p><strong>Hit@3:</strong> Percentage of queries where the correct answer is in the top 3 results.</p>
+                                    <p><strong>Hit@5:</strong> Percentage of queries where the correct answer is in the top 5 results.</p>
+                                    <p><strong>Average Retrieval Time:</strong> How long it takes to retrieve results (in seconds).</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#promptMetrics">
+                                        💬 Prompt Evaluation Metrics
+                                    </button>
+                                </h6>
+                            </div>
+                            <div id="promptMetrics" class="collapse" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <p><strong>ROUGE-1:</strong> Measures unigram overlap between generated and reference answers.</p>
+                                    <p><strong>ROUGE-2:</strong> Measures bigram overlap between generated and reference answers.</p>
+                                    <p><strong>ROUGE-L:</strong> Measures longest common subsequence overlap.</p>
+                                    <p><strong>Cosine Similarity:</strong> Semantic similarity between generated and reference answers (0-1).</p>
+                                    <p><strong>Clarity Score:</strong> How clear and well-structured the generated answer is (0-10).</p>
+                                    <p><strong>Relevancy Score:</strong> How well the answer addresses the question (0-10).</p>
+                                    <p><strong>Factual Correctness:</strong> Accuracy of facts in the generated answer (0-10).</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#interpretation">
+                                        📈 Interpreting Results
+                                    </button>
+                                </h6>
+                            </div>
+                            <div id="interpretation" class="collapse" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <p><strong>Good Retriever Performance:</strong> MRR > 0.7, Hit@1 > 0.6, Hit@3 > 0.8</p>
+                                    <p><strong>Good Prompt Performance:</strong> ROUGE-L > 0.5, Cosine Similarity > 0.7, Quality Scores > 7.0</p>
+                                    <p><strong>Comparing Models:</strong> Look for consistent performance across different metrics and question types.</p>
+                                    <p><strong>Optimization Tips:</strong></p>
+                                    <ul>
+                                        <li>If retrieval is poor, try different embedding models or chunking strategies</li>
+                                        <li>If generation is poor, experiment with different prompts or models</li>
+                                        <li>Use hybrid search (alpha ~0.5) for balanced semantic and keyword matching</li>
+                                        <li>Enable reranking for better precision</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showResultsGuide() {
+    $('#resultsGuideModal').modal('show');
+}
+</script>
+{% endblock %} 

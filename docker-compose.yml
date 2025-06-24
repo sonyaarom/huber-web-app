@@ -6,5 +6,6 @@ services:
     env_file:
       - .venv
     volumes:
+      - ./:/app
       - ./metrics:/app/metrics
       - ./.venv:/app/.venv

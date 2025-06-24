@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install wandb explicitly (already in requirements.txt but ensuring it's available)
+RUN pip install wandb
+
 # If you need spaCy models
 RUN python -m spacy download en_core_web_sm
 

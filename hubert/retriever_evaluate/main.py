@@ -1,6 +1,6 @@
 import logging
 from .evaluate_retrievers import RetrieverEvaluator
-from .config import settings
+from hubert.config import settings
 
 
 logging.basicConfig(
