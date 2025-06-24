@@ -7,6 +7,7 @@ from typing import Optional, Dict
 from functools import lru_cache
 
 from hubert.config import settings
+from hubert.prompt_evaluation.prompts.default_prompts import DEFAULT_PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,25 @@ def get_langfuse_client():
     except Exception as e:
         logger.error(f"Failed to initialize Langfuse client: {e}")
         return None
+
+def get_default_prompt(prompt_id: str) -> str:
+    """
+    Retrieves a default prompt from the local store.
+    """
+    prompt = DEFAULT_PROMPTS.get(prompt_id)
+    if not prompt:
+        logger.error(f"Default prompt for ID '{prompt_id}' not found.")
+        return ""
+    
+    # Simulate the .compile() method for consistency
+    class CompiledPrompt:
+        def __init__(self, text):
+            self.text = text
+        def compile(self):
+            return self.text
+            
+    return CompiledPrompt(prompt).compile()
+
 @dataclass
 class BuilderConfig:
     """Configuration for the ReusableChatPromptBuilder"""
@@ -108,12 +128,17 @@ class ReusableChatPromptBuilder:
         """Cache compiled templates to avoid repeated API calls"""
         try:
             langfuse_client = get_langfuse_client()
-            if langfuse_client is None:
-                logger.error(f"Langfuse client not available.")
-            return langfuse_client.get_prompt(prompt_id).compile()
-        except Exception as e:
-            logger.error(f"Failed to compile template {prompt_id}: {e}")
+            if langfuse_client:
+                # Attempt to fetch from Langfuse first
+                return langfuse_client.get_prompt(prompt_id).compile()
             
+            # Fallback if Langfuse client is not available
+            logger.warning(f"Langfuse client not available. Falling back to default prompt for ID: {prompt_id}")
+            return get_default_prompt(prompt_id)
+
+        except Exception as e:
+            logger.error(f"Failed to compile template {prompt_id} from Langfuse: {e}. Falling back to default.")
+            return get_default_prompt(prompt_id)
             
 
     def _add_component(self, name: str, prompt_id: str, weight: float, required: bool) -> None:
