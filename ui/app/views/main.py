@@ -10,6 +10,8 @@ from flask_socketio import emit
 import sys
 import os
 import logging
+import time
+import uuid
 from dotenv import set_key, find_dotenv
 
 # Configure logging properly for Flask app
@@ -291,37 +293,262 @@ def evaluation_dashboard():
         return redirect(url_for('main.chat'))
     return render_template('evaluation.html')
 
-# SocketIO event handlers will be registered in the main app
-def handle_message(message):
-    logger.info(f"Received message: {message}")
+# New feedback submission endpoint
+@bp.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    """Handle user feedback submission."""
     try:
-        ner_filters = None
-        if settings.use_ner:
-            ner_filters = extract_entities(message)
-            logger.info(f"Extracted NER filters: {ner_filters}")
-
-        # Get both the answer and the URLs from the RAG function
-        response_data = rag_main_func(message, ner_filters=ner_filters)
-        logger.info(f"RAG function returned: {type(response_data)} - {response_data}")
+        data = request.get_json()
         
-        # Check if response_data is in the expected format
-        if isinstance(response_data, dict) and 'answer' in response_data:
-            # Emit a single event with both answer and URLs
-            emit('response', response_data)
-            logger.info(f"Sending response: {response_data['answer'][:100]}...")
-        elif isinstance(response_data, str):
-            # If it's just a string, emit it as a message
-            emit('message', response_data)
-            logger.info(f"Sending message: {response_data[:100]}...")
-        else:
-            # Fallback: convert to string and send as message
-            response_str = str(response_data)
-            emit('message', response_str)
-            logger.info(f"Sending converted message: {response_str[:100]}...")
+        # Get session ID or generate one
+        session_id = session.get('session_id')
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+        
+        # Store feedback data
+        feedback_data = {
+            'session_id': session_id,
+            'user_id': current_user.id if current_user.is_authenticated else None,
+            'query': data.get('query'),
+            'generated_answer': data.get('generated_answer'),
+            'prompt_used': data.get('prompt_used'),
+            'retrieval_method': data.get('retrieval_method'),
+            'sources_urls': data.get('sources_urls', []),
+            'rating': data.get('rating'),  # 'positive' or 'negative'
+            'feedback_comment': data.get('feedback_comment'),
+            'response_time_ms': data.get('response_time_ms')
+        }
+        
+        storage = PostgresStorage()
+        feedback_id = storage.store_user_feedback(feedback_data)
+        
+        logger.info(f"Feedback stored with ID: {feedback_id}")
+        
+        return jsonify({
+            'success': True,
+            'feedback_id': feedback_id,
+            'message': 'Thank you for your feedback!'
+        })
         
     except Exception as e:
-        logger.error(f"Error processing message: {e}")
-        emit('error', {'error': str(e)})
+        logger.error(f"Error storing feedback: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error storing feedback: {str(e)}'
+        }), 500
+
+# Analytics dashboard endpoint
+@bp.route('/analytics')
+@login_required
+def analytics_dashboard():
+    """Display analytics dashboard."""
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('main.chat'))
+    
+    try:
+        storage = PostgresStorage()
+        
+        # Get metrics for different time periods
+        metrics_7d = {
+            'feedback': storage.get_feedback_metrics(days=7),
+            'queries': storage.get_query_analytics_metrics(days=7),
+            'mrr': storage.calculate_mrr_metrics(days=7)
+        }
+        
+        metrics_30d = {
+            'feedback': storage.get_feedback_metrics(days=30),
+            'queries': storage.get_query_analytics_metrics(days=30),
+            'mrr': storage.calculate_mrr_metrics(days=30)
+        }
+        
+        # Get preference dataset for download
+        preference_data = storage.get_preference_dataset()
+        
+        return render_template('analytics_dashboard.html', 
+                             title='Analytics Dashboard',
+                             metrics_7d=metrics_7d,
+                             metrics_30d=metrics_30d,
+                             preference_data_count=len(preference_data))
+        
+    except Exception as e:
+        logger.error(f"Error loading analytics dashboard: {e}")
+        flash(f'Error loading analytics: {str(e)}', 'danger')
+        
+        # Provide empty but properly structured data for the template
+        empty_metrics = {
+            'feedback': {'total_feedback': [[0]], 'positive_rate': [[0]]},
+            'queries': {'total_queries': [[0]], 'popular_terms': []},
+            'mrr': {'overall_mrr': 0, 'mrr_over_time': []}
+        }
+        
+        return render_template('analytics_dashboard.html', 
+                             title='Analytics Dashboard',
+                             metrics_7d=empty_metrics, 
+                             metrics_30d=empty_metrics, 
+                             preference_data_count=0)
+
+# API endpoint for getting analytics data (for charts)
+@bp.route('/api/analytics/<metric_type>')
+@login_required
+def get_analytics_data(metric_type):
+    """API endpoint for fetching analytics data for charts."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        days = request.args.get('days', 30, type=int)
+        storage = PostgresStorage()
+        
+        if metric_type == 'feedback':
+            data = storage.get_feedback_metrics(days=days)
+        elif metric_type == 'queries':
+            data = storage.get_query_analytics_metrics(days=days)
+        elif metric_type == 'mrr':
+            data = storage.calculate_mrr_metrics(days=days)
+        else:
+            return jsonify({'error': 'Invalid metric type'}), 400
+            
+        return jsonify(data)
+        
+    except Exception as e:
+        logger.error(f"Error fetching analytics data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# API endpoint for downloading preference dataset
+@bp.route('/api/download_preference_dataset')
+@login_required
+def download_preference_dataset():
+    """Download preference dataset as JSON."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        storage = PostgresStorage()
+        preference_data = storage.get_preference_dataset()
+        
+        return jsonify({
+            'success': True,
+            'data': preference_data,
+            'count': len(preference_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error downloading preference dataset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/submit_source_feedback', methods=['POST'])
+def submit_source_feedback():
+    """Handle source relevance feedback for MRR calculation."""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['query_analytics_id', 'url', 'rank_position', 'is_relevant']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing required field: {field}'}), 400
+        
+        # Get session ID
+        session_id = session.get('session_id', str(uuid.uuid4()))
+        
+        # Store source relevance feedback
+        storage = PostgresStorage()
+        
+        # Update the retrieval analytics record with relevance information
+        try:
+            storage.update_retrieval_relevance(
+                query_analytics_id=data['query_analytics_id'],
+                url=data['url'],
+                rank_position=data['rank_position'],
+                is_relevant=data['is_relevant']
+            )
+            
+            logger.info(f"Source feedback recorded: URL={data['url']}, Rank={data['rank_position']}, Relevant={data['is_relevant']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Source feedback submitted successfully'
+            })
+            
+        except Exception as db_error:
+            logger.error(f"Database error storing source feedback: {db_error}")
+            return jsonify({'success': False, 'message': 'Database error'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error processing source feedback: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@bp.route('/submit_search_source_feedback', methods=['POST'])
+def submit_search_source_feedback():
+    """Handle source relevance feedback from search page."""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['query', 'url', 'rank_position', 'is_relevant']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing required field: {field}'}), 400
+        
+        # Get or create session ID
+        session_id = data.get('session_id', session.get('session_id', str(uuid.uuid4())))
+        session['session_id'] = session_id
+        
+        # Store source relevance feedback
+        storage = PostgresStorage()
+        
+        try:
+            # First, create or find query analytics record for this search
+            query_data = {
+                'session_id': session_id,
+                'user_id': current_user.id if current_user.is_authenticated else None,
+                'query': data['query'],
+                'has_answer': True,  # Search always has results
+                'response_time_ms': 0,  # Not applicable for search
+                'retrieval_method': 'search',
+                'num_sources_found': 1  # At least one source for feedback
+            }
+            
+            # Check if we already have analytics for this query in this session
+            existing_query_id = storage.get_query_analytics_by_session_query(session_id, data['query'])
+            
+            if existing_query_id:
+                query_analytics_id = existing_query_id
+            else:
+                query_analytics_id = storage.store_query_analytics(query_data)
+                
+                # Store retrieval analytics for this URL
+                retrieval_results = [{
+                    'url': data['url'],
+                    'rank_position': data['rank_position'],
+                    'similarity_score': None
+                }]
+                storage.store_retrieval_analytics(query_analytics_id, retrieval_results)
+            
+            # Update the retrieval analytics record with relevance information
+            storage.update_retrieval_relevance(
+                query_analytics_id=query_analytics_id,
+                url=data['url'],
+                rank_position=data['rank_position'],
+                is_relevant=data['is_relevant']
+            )
+            
+            logger.info(f"Search source feedback recorded: Query='{data['query']}', URL={data['url']}, Rank={data['rank_position']}, Relevant={data['is_relevant']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Search source feedback submitted successfully'
+            })
+            
+        except Exception as db_error:
+            logger.error(f"Database error storing search source feedback: {db_error}")
+            return jsonify({'success': False, 'message': 'Database error'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error processing search source feedback: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @bp.route('/retrieve_urls', methods=['POST'])
 def retrieve_urls_endpoint():
@@ -330,8 +557,50 @@ def retrieve_urls_endpoint():
         if not question:
             return jsonify({"error": "Question is required"}), 400
         
+        # Get or generate session ID
+        session_id = session.get('session_id', str(uuid.uuid4()))
+        session['session_id'] = session_id
+        
+        start_time = time.time()
+        
         # This now uses the cached retriever
         response_data = get_urls(question)
+        
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Store query analytics for search
+        storage = PostgresStorage()
+        query_data = {
+            'session_id': session_id,
+            'user_id': current_user.id if current_user.is_authenticated else None,
+            'query': question,
+            'has_answer': bool(response_data.get('urls')),
+            'response_time_ms': response_time_ms,
+            'retrieval_method': 'search',
+            'num_sources_found': len(response_data.get('urls', []))
+        }
+        
+        query_analytics_id = storage.store_query_analytics(query_data)
+        
+        # Store retrieval analytics if we have URLs
+        if response_data.get('urls'):
+            url_scores = response_data.get('url_scores', {})
+            retrieval_results = [
+                {
+                    'url': url,
+                    'rank_position': idx + 1,
+                    'similarity_score': url_scores.get(url)
+                }
+                for idx, url in enumerate(response_data['urls'])
+            ]
+            storage.store_retrieval_analytics(query_analytics_id, retrieval_results)
+        
+        # Add metadata for potential feedback
+        response_data['session_id'] = session_id
+        response_data['query_analytics_id'] = query_analytics_id
+        response_data['response_time_ms'] = response_time_ms
+        
         return jsonify(response_data)
         
     except Exception as e:
@@ -388,3 +657,103 @@ def config():
 
     # For both GET and POST, use the freshly reloaded settings
     return render_template('config.html', title='Configuration', config=current_settings)
+
+# SocketIO event handlers will be registered in the main app
+def handle_message(message):
+    logger.info(f"Received message: {message}")
+    start_time = time.time()
+    
+    try:
+        # Get session ID or generate one
+        session_id = session.get('session_id')
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+
+        ner_filters = None
+        if settings.use_ner:
+            ner_filters = extract_entities(message)
+            logger.info(f"Extracted NER filters: {ner_filters}")
+
+        # Get both the answer and the URLs from the RAG function
+        response_data = rag_main_func(message, ner_filters=ner_filters)
+        
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        logger.info(f"RAG function returned: {type(response_data)} - {response_data}")
+        
+        # Store query analytics
+        storage = PostgresStorage()
+        query_data = {
+            'session_id': session_id,
+            'user_id': current_user.id if current_user.is_authenticated else None,
+            'query': message,
+            'has_answer': bool(response_data.get('answer') if isinstance(response_data, dict) else bool(response_data)),
+            'response_time_ms': response_time_ms,
+            'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+            'num_sources_found': len(response_data.get('sources', [])) if isinstance(response_data, dict) else 0
+        }
+        
+        query_analytics_id = storage.store_query_analytics(query_data)
+        
+        # Store retrieval analytics if we have URLs
+        if isinstance(response_data, dict) and response_data.get('sources'):
+            source_scores = response_data.get('source_scores', {})
+            retrieval_results = [
+                {
+                    'url': url,
+                    'rank_position': idx + 1,
+                    'similarity_score': source_scores.get(url)
+                }
+                for idx, url in enumerate(response_data['sources'])
+            ]
+            storage.store_retrieval_analytics(query_analytics_id, retrieval_results)
+        
+        # Check if response_data is in the expected format
+        if isinstance(response_data, dict) and 'answer' in response_data:
+            # Add metadata for feedback collection
+            response_data['query'] = message
+            response_data['session_id'] = session_id
+            response_data['response_time_ms'] = response_time_ms
+            response_data['query_analytics_id'] = query_analytics_id
+            response_data['retrieval_method'] = 'hybrid' if settings.use_hybrid_search else 'vector'
+            
+            # Rename 'urls' to 'sources' for consistency if needed
+            if 'urls' in response_data and 'sources' not in response_data:
+                response_data['sources'] = response_data['urls']
+            
+            # Emit a single event with both answer and URLs
+            emit('response', response_data)
+            logger.info(f"Sending response with {len(response_data.get('sources', []))} sources: {response_data['answer'][:100]}...")
+        elif isinstance(response_data, str):
+            # If it's just a string, emit it as a message
+            response_with_metadata = {
+                'answer': response_data,
+                'query': message,
+                'session_id': session_id,
+                'response_time_ms': response_time_ms,
+                'query_analytics_id': query_analytics_id,
+                'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+                'sources': []
+            }
+            emit('response', response_with_metadata)
+            logger.info(f"Sending message: {response_data[:100]}...")
+        else:
+            # Fallback: convert to string and send as message
+            response_str = str(response_data)
+            response_with_metadata = {
+                'answer': response_str,
+                'query': message,
+                'session_id': session_id,
+                'response_time_ms': response_time_ms,
+                'query_analytics_id': query_analytics_id,
+                'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+                'sources': []
+            }
+            emit('response', response_with_metadata)
+            logger.info(f"Sending converted message: {response_str[:100]}...")
+        
+    except Exception as e:
+        logger.error(f"Error processing message: {e}")
+        emit('error', {'error': str(e)})

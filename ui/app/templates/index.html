@@ -305,32 +305,128 @@
       background-color: #0b3d91;
     }
     .feedback {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 5px;
+      margin-top: 10px;
+      opacity: 0.6;
+      transition: opacity 0.3s ease;
+    }
+    .feedback:hover {
+      opacity: 1;
     }
     .feedback i {
+      margin-right: 10px;
       cursor: pointer;
-      margin-left: 10px;
-      color: #0b3d91;
-      transition: transform 0.3s ease, color 0.3s ease;
+      color: #6c757d;
+      transition: color 0.3s ease, transform 0.2s ease;
     }
     .feedback i:hover {
       transform: scale(1.2);
     }
     .feedback i.active {
+      color: #007bff;
+      transform: scale(1.2);
+    }
+    .feedback .fa-thumbs-up.active {
       color: #28a745;
     }
-    .feedback i.active.fa-thumbs-down {
+    .feedback .fa-thumbs-down.active {
       color: #dc3545;
     }
-    .dark-mode .feedback i {
-      color: #ffffff;
+    /* Sources container styling */
+    .sources-container {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 10px;
+      border-left: 4px solid #0b3d91;
     }
-    .dark-mode .feedback i.active {
+    .dark-mode .sources-container {
+      background-color: #2d2d2d;
+      border-left-color: #6c9fff;
+    }
+    .sources-title {
+      color: #0b3d91;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      margin-top: 0;
+    }
+    .dark-mode .sources-title {
+      color: #6c9fff;
+    }
+    .sources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .source-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px;
+      background-color: white;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+    }
+    .dark-mode .source-item {
+      background-color: #3d3d3d;
+      box-shadow: 0 1px 3px rgba(255,255,255,0.1);
+    }
+    .source-item:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .dark-mode .source-item:hover {
+      box-shadow: 0 2px 6px rgba(255,255,255,0.15);
+    }
+    .source-link {
+      flex: 1;
+      margin-right: 10px;
+    }
+    .source-link a {
+      color: #0b3d91;
+      text-decoration: none;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dark-mode .source-link a {
+      color: #6c9fff;
+    }
+    .source-link a:hover {
+      color: #084298;
+      text-decoration: underline;
+    }
+    .dark-mode .source-link a:hover {
+      color: #8db4ff;
+    }
+    .source-feedback {
+      display: flex;
+      gap: 5px;
+      opacity: 0.6;
+      transition: opacity 0.3s ease;
+    }
+    .source-item:hover .source-feedback {
+      opacity: 1;
+    }
+    .source-thumb {
+      cursor: pointer;
+      color: #6c757d;
+      font-size: 14px;
+      transition: color 0.3s ease, transform 0.2s ease;
+      padding: 2px;
+    }
+    .source-thumb:hover {
+      transform: scale(1.2);
+    }
+    .source-thumb.active {
+      transform: scale(1.2);
+    }
+    .source-thumb[data-source-feedback="relevant"].active {
       color: #28a745;
     }
-    .dark-mode .feedback i.active.fa-thumbs-down {
+    .source-thumb[data-source-feedback="not-relevant"].active {
       color: #dc3545;
     }
     @keyframes fadeIn {
@@ -385,31 +481,6 @@
       background-color: #082d6e;
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(11, 61, 145, 0.3);
-    }
-    /* Sources container styles */
-    .sources-container {
-      margin-top: 15px;
-      padding-top: 10px;
-      border-top: 1px solid #ddd;
-      font-size: 0.9em;
-    }
-    .sources-container h5 {
-      font-size: 1em;
-      margin-bottom: 5px;
-      color: #0b3d91;
-    }
-    .sources-container ul {
-      padding-left: 20px;
-      margin-bottom: 0;
-    }
-    .sources-container a {
-      color: #0b3d91;
-      text-decoration: underline;
-      word-break: break-all;
-    }
-    .dark-mode .sources-container h5,
-    .dark-mode .sources-container a {
-      color: #6c9fff;
     }
     .how-to-use {
       position: fixed;
@@ -1092,22 +1163,27 @@
       }
       
       socket.on('response', function(data) {
-        // Remove the bot response animation if present
-        var botResponseAnimation = document.querySelector('.bot-message .bot-response');
-        if (botResponseAnimation) {
-          // Remove the entire bot message container
-          botResponseAnimation.closest('.bot-message').remove();
-        }
-
-        // Add console logging for debugging
         console.log('Received response:', data);
-
-        // Extract the answer from the response data
-        var msg = data.answer || data;
+        
+        // Remove any existing bot response animation
+        var existingBotResponse = document.querySelector('.bot-message .bot-response');
+        if (existingBotResponse) {
+          existingBotResponse.closest('.bot-message').remove();
+        }
+        
+        // Store metadata for feedback collection
+        window.lastResponseMetadata = {
+          query: data.query,
+          session_id: data.session_id,
+          response_time_ms: data.response_time_ms,
+          query_analytics_id: data.query_analytics_id,
+          retrieval_method: data.retrieval_method || 'unknown',
+          prompt_used: data.defined_prompt || 'default'
+        };
         
         // Convert the raw markdown response to HTML using our parseMarkdown function
-        var convertedMsg = parseMarkdown(msg);
-
+        var convertedMsg = parseMarkdown(data.answer || data);
+        
         var message = document.createElement('li');
         message.className = 'bot-message';
         message.innerHTML = `
@@ -1117,9 +1193,10 @@
               <div class="message-content">
                 ${convertedMsg}
               </div>
+              ${data.sources && data.sources.length > 0 ? generateSourcesHTML(data.sources, data.query_analytics_id) : ''}
               <div class="feedback">
-                <i class="fas fa-thumbs-up"></i>
-                <i class="fas fa-thumbs-down"></i>
+                <i class="fas fa-thumbs-up" data-feedback="positive"></i>
+                <i class="fas fa-thumbs-down" data-feedback="negative"></i>
               </div>
             </div>
           </div>
@@ -1127,31 +1204,16 @@
         
         messages.appendChild(message);
         message.scrollIntoView({behavior: "smooth"});
-        
-        // Display URLs if they exist in the response data
-        if (data.urls && data.urls.length > 0) {
-          var urlsHtml = '<div class="sources-container"><h5>Sources:</h5><ul>';
-          data.urls.forEach(function(url) {
-            urlsHtml += '<li><a href="' + url + '" target="_blank">' + url + '</a></li>';
-          });
-          urlsHtml += '</ul></div>';
-          // Append URLs to the last bot message
-          var lastBotMessage = $('.bot-message').last();
-          if (lastBotMessage.length) {
-            lastBotMessage.find('.message-content').append(urlsHtml);
-          }
-        }
       });
       
-      // Fallback listener for plain message events
+      // Keep the old 'message' handler for backward compatibility
       socket.on('message', function(msg) {
-        // Remove the bot response animation if present
-        var botResponseAnimation = document.querySelector('.bot-message .bot-response');
-        if (botResponseAnimation) {
-          // Remove the entire bot message container
-          botResponseAnimation.closest('.bot-message').remove();
+        // Remove any existing bot response animation
+        var existingBotResponse = document.querySelector('.bot-message .bot-response');
+        if (existingBotResponse) {
+          existingBotResponse.closest('.bot-message').remove();
         }
-
+        
         // Add console logging for debugging
         console.log('Received message:', msg);
 
@@ -1168,8 +1230,8 @@
                 ${convertedMsg}
               </div>
               <div class="feedback">
-                <i class="fas fa-thumbs-up"></i>
-                <i class="fas fa-thumbs-down"></i>
+                <i class="fas fa-thumbs-up" data-feedback="positive"></i>
+                <i class="fas fa-thumbs-down" data-feedback="negative"></i>
               </div>
             </div>
           </div>
@@ -1207,15 +1269,145 @@
       }
       
       document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('fa-thumbs-up') || event.target.classList.contains('fa-thumbs-down')) {
-          var feedback = event.target.classList.contains('fa-thumbs-up') ? 'positive' : 'negative';
+        // Handle overall message feedback (thumbs up/down)
+        if (event.target.hasAttribute('data-feedback')) {
+          var feedback = event.target.getAttribute('data-feedback');
           event.target.classList.add('active');
-          if (feedback === 'positive') {
-            event.target.nextElementSibling.classList.remove('active');
-          } else {
-            event.target.previousElementSibling.classList.remove('active');
+          
+          // Remove active state from the other feedback button
+          var feedbackContainer = event.target.parentElement;
+          var otherButton = feedbackContainer.querySelector(`i[data-feedback="${feedback === 'positive' ? 'negative' : 'positive'}"]`);
+          if (otherButton) {
+            otherButton.classList.remove('active');
           }
-          console.log('Feedback:', feedback);
+          
+          // Get the message container to extract feedback data
+          var messageContainer = event.target.closest('.bot-message');
+          var messageContent = messageContainer.querySelector('.message-content');
+          var sourcesContainer = messageContainer.querySelector('.sources-container');
+          
+          // Extract sources URLs if available
+          var sourcesUrls = [];
+          if (sourcesContainer) {
+            var sourceLinks = sourcesContainer.querySelectorAll('.source-link a');
+            sourcesUrls = Array.from(sourceLinks).map(link => link.href);
+          }
+          
+          // Get the generated answer text (excluding sources)
+          var generatedAnswer = messageContent.cloneNode(true);
+          var sourcesToRemove = generatedAnswer.querySelector('.sources-container');
+          if (sourcesToRemove) {
+            sourcesToRemove.remove();
+          }
+          
+          // Get the previous user message to find the query
+          var userMessages = document.querySelectorAll('.user-message');
+          var correspondingQuery = '';
+          var botMessages = Array.from(document.querySelectorAll('.bot-message'));
+          var currentIndex = botMessages.indexOf(messageContainer);
+          
+          if (userMessages[currentIndex]) {
+            correspondingQuery = userMessages[currentIndex].querySelector('.message-content span').textContent;
+          }
+          
+          // Get metadata from the last response
+          var metadata = window.lastResponseMetadata || {};
+          
+          // Prepare feedback data
+          var feedbackData = {
+            query: correspondingQuery,
+            generated_answer: generatedAnswer.textContent.trim(),
+            rating: feedback,
+            sources_urls: sourcesUrls,
+            session_id: metadata.session_id,
+            response_time_ms: metadata.response_time_ms,
+            prompt_used: metadata.prompt_used || 'default',
+            retrieval_method: metadata.retrieval_method || 'unknown'
+          };
+          
+          // Send feedback to backend
+          fetch('/submit_feedback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(feedbackData)
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              console.log('Feedback submitted successfully:', data.message);
+              // Show a brief success indicator
+              var feedbackIcon = event.target;
+              var originalClass = feedbackIcon.className;
+              feedbackIcon.style.color = feedback === 'positive' ? '#28a745' : '#dc3545';
+              feedbackIcon.style.transform = 'scale(1.2)';
+              setTimeout(() => {
+                feedbackIcon.style.transform = 'scale(1)';
+              }, 200);
+            } else {
+              console.error('Feedback submission failed:', data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Error submitting feedback:', error);
+          });
+        }
+        
+        // Handle individual source relevance feedback
+        if (event.target.hasAttribute('data-source-feedback')) {
+          var sourceFeedback = event.target.getAttribute('data-source-feedback');
+          var sourceItem = event.target.closest('.source-item');
+          var url = sourceItem.getAttribute('data-url');
+          var rank = parseInt(sourceItem.getAttribute('data-rank'));
+          var queryAnalyticsId = sourceItem.getAttribute('data-query-id');
+          
+          // Toggle active state
+          event.target.classList.toggle('active');
+          
+          // Remove active state from the other source feedback button
+          var otherSourceButton = sourceItem.querySelector(`i[data-source-feedback="${sourceFeedback === 'relevant' ? 'not-relevant' : 'relevant'}"]`);
+          if (otherSourceButton) {
+            otherSourceButton.classList.remove('active');
+          }
+          
+          // Determine relevance based on feedback
+          var isRelevant = sourceFeedback === 'relevant' && event.target.classList.contains('active');
+          
+          // Prepare source feedback data
+          var sourceFeedbackData = {
+            query_analytics_id: queryAnalyticsId,
+            url: url,
+            rank_position: rank,
+            is_relevant: isRelevant,
+            feedback_type: 'source_relevance'
+          };
+          
+          // Send source feedback to backend for MRR calculation
+          fetch('/submit_source_feedback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sourceFeedbackData)
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              console.log('Source feedback submitted successfully:', data.message);
+              // Show visual feedback
+              event.target.style.color = isRelevant ? '#28a745' : '#dc3545';
+              event.target.style.transform = 'scale(1.2)';
+              setTimeout(() => {
+                event.target.style.transform = 'scale(1)';
+              }, 200);
+            } else {
+              console.error('Source feedback submission failed:', data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Error submitting source feedback:', error);
+          });
         }
       });
       
@@ -1277,6 +1469,41 @@
       homeIcon.addEventListener('click', () => {
         window.location.href = '/';
       });
+
+      // Function to generate HTML for sources with individual feedback buttons
+      function generateSourcesHTML(sources, queryAnalyticsId) {
+        if (!sources || sources.length === 0) return '';
+        
+        var sourcesHTML = `
+          <div class="sources-container">
+            <h4 class="sources-title">📚 Sources:</h4>
+            <div class="sources-list">
+        `;
+        
+        sources.forEach(function(url, index) {
+          var shortUrl = url.length > 50 ? url.substring(0, 50) + '...' : url;
+          sourcesHTML += `
+            <div class="source-item" data-url="${url}" data-rank="${index + 1}" data-query-id="${queryAnalyticsId}">
+              <div class="source-link">
+                <a href="${url}" target="_blank" rel="noopener noreferrer">
+                  <i class="fas fa-external-link-alt"></i> ${shortUrl}
+                </a>
+              </div>
+              <div class="source-feedback">
+                <i class="fas fa-thumbs-up source-thumb" data-source-feedback="relevant" title="Mark as relevant"></i>
+                <i class="fas fa-thumbs-down source-thumb" data-source-feedback="not-relevant" title="Mark as not relevant"></i>
+              </div>
+            </div>
+          `;
+        });
+        
+        sourcesHTML += `
+            </div>
+          </div>
+        `;
+        
+        return sourcesHTML;
+      }
     });
   </script>
 </body>

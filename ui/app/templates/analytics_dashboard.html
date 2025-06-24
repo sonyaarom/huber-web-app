@@ -1,0 +1,516 @@
+{% extends "base.html" %}
+
+{% block style %}
+<style>
+    .main {
+        max-width: none;
+        margin: 0;
+        padding: 20px;
+    }
+    .metrics-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #0b3d91;
+    }
+    .metric-label {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin: 20px 0;
+    }
+    .word-cloud-container {
+        position: relative;
+        height: 300px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: center;
+    }
+    .tabs {
+        border-bottom: 1px solid #dee2e6;
+        margin-bottom: 20px;
+    }
+    .tab {
+        display: inline-block;
+        padding: 10px 20px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        color: #666;
+        border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+        color: #0b3d91;
+        border-bottom-color: #0b3d91;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .preference-dataset-section {
+        background: #e8f4fd;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    .download-btn {
+        background: #0b3d91;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .download-btn:hover {
+        background: #082d6e;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">📊 Analytics Dashboard</h1>
+    
+    <!-- Time Period Tabs -->
+    <div class="tabs">
+        <button class="tab active" onclick="showTimeframe('7d')">Last 7 Days</button>
+        <button class="tab" onclick="showTimeframe('30d')">Last 30 Days</button>
+    </div>
+
+    <!-- 7 Days Content -->
+    <div id="7d-content" class="tab-content active">
+        <div class="row">
+            <!-- Key Metrics Summary -->
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="total-feedback-7d">{{ metrics_7d.feedback.total_feedback[0][0] if metrics_7d.feedback.total_feedback else 0 }}</div>
+                    <div class="metric-label">Total Feedback (7d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="positive-rate-7d">
+                        {% set total = metrics_7d.feedback.feedback_distribution | length %}
+                        {% set positive = metrics_7d.feedback.feedback_distribution | selectattr("0", "equalto", "positive") | list %}
+                        {% if total > 0 and positive %}
+                            {{ "%.1f" | format((positive[0][1] / (positive[0][1] + (metrics_7d.feedback.feedback_distribution | selectattr("0", "equalto", "negative") | list | first | default([0, 0]))[1]) * 100)) }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="metric-label">Positive Rate (7d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="total-queries-7d">
+                        {% set queries = metrics_7d.queries.queries_per_day %}
+                        {{ queries | sum(attribute=1) if queries else 0 }}
+                    </div>
+                    <div class="metric-label">Total Queries (7d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="mrr-7d">{{ "%.3f" | format(metrics_7d.mrr.overall_mrr) if metrics_7d.mrr.overall_mrr else "N/A" }}</div>
+                    <div class="metric-label">Mean Reciprocal Rank (7d)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>📈 Queries per Day (7d)</h5>
+                    <div class="chart-container">
+                        <canvas id="queries-chart-7d"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>👍👎 Feedback Distribution (7d)</h5>
+                    <div class="chart-container">
+                        <canvas id="feedback-chart-7d"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>🎯 MRR Over Time (7d)</h5>
+                    <div class="chart-container">
+                        <canvas id="mrr-chart-7d"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>☁️ Popular Search Terms (7d)</h5>
+                    <div class="word-cloud-container" id="word-cloud-7d">
+                        <!-- Word cloud will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 30 Days Content -->
+    <div id="30d-content" class="tab-content">
+        <div class="row">
+            <!-- Key Metrics Summary -->
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="total-feedback-30d">{{ metrics_30d.feedback.total_feedback[0][0] if metrics_30d.feedback.total_feedback else 0 }}</div>
+                    <div class="metric-label">Total Feedback (30d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="positive-rate-30d">
+                        {% set total = metrics_30d.feedback.feedback_distribution | length %}
+                        {% set positive = metrics_30d.feedback.feedback_distribution | selectattr("0", "equalto", "positive") | list %}
+                        {% if total > 0 and positive %}
+                            {{ "%.1f" | format((positive[0][1] / (positive[0][1] + (metrics_30d.feedback.feedback_distribution | selectattr("0", "equalto", "negative") | list | first | default([0, 0]))[1]) * 100)) }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="metric-label">Positive Rate (30d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="total-queries-30d">
+                        {% set queries = metrics_30d.queries.queries_per_day %}
+                        {{ queries | sum(attribute=1) if queries else 0 }}
+                    </div>
+                    <div class="metric-label">Total Queries (30d)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metrics-card">
+                    <div class="metric-value" id="mrr-30d">{{ "%.3f" | format(metrics_30d.mrr.overall_mrr) if metrics_30d.mrr.overall_mrr else "N/A" }}</div>
+                    <div class="metric-label">Mean Reciprocal Rank (30d)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>📈 Queries per Day (30d)</h5>
+                    <div class="chart-container">
+                        <canvas id="queries-chart-30d"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>👍👎 Feedback Distribution (30d)</h5>
+                    <div class="chart-container">
+                        <canvas id="feedback-chart-30d"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>🎯 MRR Over Time (30d)</h5>
+                    <div class="chart-container">
+                        <canvas id="mrr-chart-30d"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metrics-card">
+                    <h5>☁️ Popular Search Terms (30d)</h5>
+                    <div class="word-cloud-container" id="word-cloud-30d">
+                        <!-- Word cloud will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preference Dataset Section -->
+    <div class="preference-dataset-section">
+        <h4>🎯 Preference Dataset for RLHF/DPO</h4>
+        <p>This dataset contains user feedback data that can be used for Reinforcement Learning from Human Feedback (RLHF) or Direct Preference Optimization (DPO) training.</p>
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Total Records:</strong> {{ preference_data_count }}<br>
+                <strong>Contains:</strong> Query, generated answer, rating, prompt used, sources, timestamp<br>
+                <strong>Format:</strong> JSON
+            </div>
+            <div class="col-md-6 text-right">
+                <button class="download-btn" onclick="downloadPreferenceDataset()">
+                    📥 Download Preference Dataset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Global chart instances
+    let charts = {};
+    
+    // Tab switching function
+    function showTimeframe(timeframe) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        // Show selected content
+        document.getElementById(timeframe + '-content').classList.add('active');
+        
+        // Update tab buttons
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Load charts for the selected timeframe
+        loadCharts(timeframe);
+    }
+    
+    // Load charts for specific timeframe
+    function loadCharts(timeframe) {
+        const days = timeframe === '7d' ? 7 : 30;
+        
+        // Load queries per day chart
+        loadQueriesChart(timeframe, days);
+        
+        // Load feedback distribution chart
+        loadFeedbackChart(timeframe, days);
+        
+        // Load MRR chart
+        loadMRRChart(timeframe, days);
+        
+        // Load word cloud
+        loadWordCloud(timeframe, days);
+    }
+    
+    function loadQueriesChart(timeframe, days) {
+        fetch(`/api/analytics/queries?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById(`queries-chart-${timeframe}`).getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (charts[`queries-${timeframe}`]) {
+                    charts[`queries-${timeframe}`].destroy();
+                }
+                
+                const dates = data.queries_per_day.map(item => item[0]);
+                const counts = data.queries_per_day.map(item => item[1]);
+                
+                charts[`queries-${timeframe}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [{
+                            label: 'Queries per Day',
+                            data: counts,
+                            borderColor: '#0b3d91',
+                            backgroundColor: 'rgba(11, 61, 145, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading queries chart:', error));
+    }
+    
+    function loadFeedbackChart(timeframe, days) {
+        fetch(`/api/analytics/feedback?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById(`feedback-chart-${timeframe}`).getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (charts[`feedback-${timeframe}`]) {
+                    charts[`feedback-${timeframe}`].destroy();
+                }
+                
+                const distribution = data.feedback_distribution || [];
+                const labels = distribution.map(item => item[0]);
+                const counts = distribution.map(item => item[1]);
+                
+                charts[`feedback-${timeframe}`] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: ['#28a745', '#dc3545'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading feedback chart:', error));
+    }
+    
+    function loadMRRChart(timeframe, days) {
+        fetch(`/api/analytics/mrr?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById(`mrr-chart-${timeframe}`).getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (charts[`mrr-${timeframe}`]) {
+                    charts[`mrr-${timeframe}`].destroy();
+                }
+                
+                const mrrData = data.mrr_over_time || [];
+                const dates = mrrData.map(item => item[0]);
+                const mrr_values = mrrData.map(item => item[1]);
+                
+                charts[`mrr-${timeframe}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [{
+                            label: 'Mean Reciprocal Rank',
+                            data: mrr_values,
+                            borderColor: '#17a2b8',
+                            backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 1.0
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading MRR chart:', error));
+    }
+    
+    function loadWordCloud(timeframe, days) {
+        fetch(`/api/analytics/queries?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById(`word-cloud-${timeframe}`);
+                const terms = data.popular_terms || [];
+                
+                // Clear existing content
+                container.innerHTML = '';
+                
+                if (terms.length === 0) {
+                    container.innerHTML = '<p style="color: #666; margin-top: 100px;">No search terms available</p>';
+                    return;
+                }
+                
+                // Create simple word cloud visualization
+                const maxFreq = Math.max(...terms.map(t => t[1]));
+                const minSize = 12;
+                const maxSize = 40;
+                
+                terms.slice(0, 20).forEach(([term, freq]) => {
+                    const size = minSize + (freq / maxFreq) * (maxSize - minSize);
+                    const span = document.createElement('span');
+                    span.textContent = term;
+                    span.style.fontSize = size + 'px';
+                    span.style.margin = '5px';
+                    span.style.display = 'inline-block';
+                    span.style.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+                    span.style.fontWeight = 'bold';
+                    container.appendChild(span);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading word cloud:', error);
+                document.getElementById(`word-cloud-${timeframe}`).innerHTML = 
+                    '<p style="color: #666; margin-top: 100px;">Error loading word cloud</p>';
+            });
+    }
+    
+    function downloadPreferenceDataset() {
+        fetch('/api/download_preference_dataset')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Create download link
+                    const blob = new Blob([JSON.stringify(data.data, null, 2)], {
+                        type: 'application/json'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `preference_dataset_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    alert(`Downloaded ${data.count} preference records`);
+                } else {
+                    alert('Error downloading dataset: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error downloading dataset:', error);
+                alert('Error downloading dataset');
+            });
+    }
+    
+    // Load charts on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCharts('7d');
+    });
+</script>
+{% endblock %} 

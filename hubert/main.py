@@ -44,7 +44,17 @@ def retrieve_urls(question: str):
     retriever = get_retriever()
     retrieved_docs = retriever.retrieve(question)
     urls = [doc['url'] for doc in retrieved_docs if 'url' in doc]
-    return {"urls": list(set(urls))}
+    
+    # Extract similarity scores for each URL
+    url_scores = {}
+    for doc in retrieved_docs:
+        if 'url' in doc:
+            # Get the best available score (reranked_score > score > similarity)
+            score = doc.get('reranked_score') or doc.get('score') or doc.get('similarity') or 0.0
+            # Convert numpy types to Python float
+            url_scores[doc['url']] = float(score)
+    
+    return {"urls": list(set(urls)), "url_scores": url_scores}
 
 def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = None):
     """
@@ -62,7 +72,20 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
     
     sources = [doc.get('url') for doc in retrieved_docs if doc.get('url')]
     
-    return {"answer": answer, "sources": list(set(sources))}
+    # Extract similarity scores for each source URL
+    source_scores = {}
+    for doc in retrieved_docs:
+        if doc.get('url'):
+            # Get the best available score (reranked_score > score > similarity)
+            score = doc.get('reranked_score') or doc.get('score') or doc.get('similarity') or 0.0
+            # Convert numpy types to Python float
+            source_scores[doc['url']] = float(score)
+    
+    return {
+        "answer": answer, 
+        "sources": list(set(sources)),
+        "source_scores": source_scores
+    }
 
 if __name__ == '__main__':
     # Example usage
