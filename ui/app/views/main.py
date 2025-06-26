@@ -12,6 +12,7 @@ import os
 import logging
 import time
 import uuid
+import traceback
 from dotenv import set_key, find_dotenv
 
 # Configure logging properly for Flask app
@@ -342,7 +343,7 @@ def submit_feedback():
 @bp.route('/analytics')
 @login_required
 def analytics_dashboard():
-    """Display analytics dashboard."""
+    """Display comprehensive analytics dashboard."""
     if not current_user.is_admin:
         flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('main.chat'))
@@ -350,44 +351,47 @@ def analytics_dashboard():
     try:
         storage = PostgresStorage()
         
-        # Get metrics for different time periods
-        metrics_7d = {
-            'feedback': storage.get_feedback_metrics(days=7),
-            'queries': storage.get_query_analytics_metrics(days=7),
-            'mrr': storage.calculate_mrr_metrics(days=7)
-        }
+        # Get comprehensive metrics for different time periods
+        logger.info("Fetching 7-day metrics...")
+        metrics_7d = storage.get_comprehensive_analytics_metrics(days=7)
+        logger.info(f"7-day metrics keys: {list(metrics_7d.keys())}")
         
-        metrics_30d = {
-            'feedback': storage.get_feedback_metrics(days=30),
-            'queries': storage.get_query_analytics_metrics(days=30),
-            'mrr': storage.calculate_mrr_metrics(days=30)
-        }
+        logger.info("Fetching 30-day metrics...")
+        metrics_30d = storage.get_comprehensive_analytics_metrics(days=30)
+        logger.info(f"30-day metrics keys: {list(metrics_30d.keys())}")
         
-        # Get preference dataset for download
-        preference_data = storage.get_preference_dataset()
-        
-        return render_template('analytics_dashboard.html', 
-                             title='Analytics Dashboard',
+        logger.info("Rendering template...")
+        return render_template('comprehensive_analytics.html', 
+                             title='Comprehensive Analytics Dashboard',
                              metrics_7d=metrics_7d,
-                             metrics_30d=metrics_30d,
-                             preference_data_count=len(preference_data))
+                             metrics_30d=metrics_30d)
         
     except Exception as e:
         logger.error(f"Error loading analytics dashboard: {e}")
+        logger.error(f"Error traceback: {traceback.format_exc()}")
         flash(f'Error loading analytics: {str(e)}', 'danger')
         
         # Provide empty but properly structured data for the template
         empty_metrics = {
-            'feedback': {'total_feedback': [[0]], 'positive_rate': [[0]]},
-            'queries': {'total_queries': [[0]], 'popular_terms': []},
-            'mrr': {'overall_mrr': 0, 'mrr_over_time': []}
+            'requests_per_day': [],
+            'avg_response_time_per_day': [],
+            'popular_queries': [],
+            'retrieval_methods': [],
+            'mrr_metrics': {'overall_mrr': 0, 'mrr_over_time': []},
+            'top_urls': [],
+            'precision_metrics': [],
+            'summary_stats': {
+                'total_requests': 0,
+                'total_unique_queries': 0,
+                'avg_response_time': 0,
+                'total_feedback_given': 0
+            }
         }
         
-        return render_template('analytics_dashboard.html', 
-                             title='Analytics Dashboard',
+        return render_template('comprehensive_analytics.html', 
+                             title='Comprehensive Analytics Dashboard',
                              metrics_7d=empty_metrics, 
-                             metrics_30d=empty_metrics, 
-                             preference_data_count=0)
+                             metrics_30d=empty_metrics)
 
 # API endpoint for getting analytics data (for charts)
 @bp.route('/api/analytics/<metric_type>')
@@ -500,26 +504,36 @@ def submit_search_source_feedback():
         storage = PostgresStorage()
         
         try:
-            # First, create or find query analytics record for this search
-            query_data = {
-                'session_id': session_id,
-                'user_id': current_user.id if current_user.is_authenticated else None,
-                'query': data['query'],
-                'has_answer': True,  # Search always has results
-                'response_time_ms': 0,  # Not applicable for search
-                'retrieval_method': 'search',
-                'num_sources_found': 1  # At least one source for feedback
-            }
-            
-            # Check if we already have analytics for this query in this session
+            # First, try to find existing query analytics record for this search
+            # Try session-based lookup first
             existing_query_id = storage.get_query_analytics_by_session_query(session_id, data['query'])
+            
+            # If no session-based match and user is authenticated, try user-based lookup
+            if not existing_query_id and current_user.is_authenticated:
+                existing_query_id = storage.get_recent_query_analytics_by_user_query(
+                    current_user.id, data['query'], hours=2
+                )
             
             if existing_query_id:
                 query_analytics_id = existing_query_id
+                # Don't create new retrieval analytics - just update existing one
+                logger.info(f"Found existing query analytics ID {query_analytics_id} for query '{data['query']}'")
             else:
-                query_analytics_id = storage.store_query_analytics(query_data)
+                # Create new query analytics record only if none exists
+                query_data = {
+                    'session_id': session_id,
+                    'user_id': current_user.id if current_user.is_authenticated else None,
+                    'query': data['query'],
+                    'has_answer': True,  # Search always has results
+                    'response_time_ms': 0,  # Not applicable for search feedback
+                    'retrieval_method': 'search',
+                    'num_sources_found': 1  # At least one source for feedback
+                }
                 
-                # Store retrieval analytics for this URL
+                query_analytics_id = storage.store_query_analytics(query_data)
+                logger.info(f"Created new query analytics ID {query_analytics_id} for query '{data['query']}'")
+                
+                # Store retrieval analytics for this URL only if it's a new query
                 retrieval_results = [{
                     'url': data['url'],
                     'rank_position': data['rank_position'],
@@ -528,14 +542,14 @@ def submit_search_source_feedback():
                 storage.store_retrieval_analytics(query_analytics_id, retrieval_results)
             
             # Update the retrieval analytics record with relevance information
-            storage.update_retrieval_relevance(
+            update_result = storage.update_retrieval_relevance(
                 query_analytics_id=query_analytics_id,
                 url=data['url'],
                 rank_position=data['rank_position'],
                 is_relevant=data['is_relevant']
             )
             
-            logger.info(f"Search source feedback recorded: Query='{data['query']}', URL={data['url']}, Rank={data['rank_position']}, Relevant={data['is_relevant']}")
+            logger.info(f"Search source feedback recorded: Query='{data['query']}', URL={data['url']}, Rank={data['rank_position']}, Relevant={data['is_relevant']}, Update result: {update_result}")
             
             return jsonify({
                 'success': True,

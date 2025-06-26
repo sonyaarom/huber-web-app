@@ -1,0 +1,229 @@
+<!-- Summary Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metrics-card">
+            <div class="metric-value">{{ metrics.summary_stats.total_requests }}</div>
+            <div class="metric-label">🔍 Total Requests</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metrics-card">
+            <div class="metric-value">{{ metrics.summary_stats.total_unique_queries }}</div>
+            <div class="metric-label">💬 Unique Queries</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metrics-card">
+            <div class="metric-value">{{ "%.0f"|format(metrics.summary_stats.avg_response_time) }}ms</div>
+            <div class="metric-label">⚡ Avg Response Time</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metrics-card">
+            <div class="metric-value">{{ "%.3f"|format(metrics.mrr_metrics.overall_mrr) }}</div>
+            <div class="metric-label">🎯 Overall MRR</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1: Requests and Response Time -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>📈 Requests per Day</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="requests-chart-{{ timeframe }}"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>⚡ Average Response Time</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="response-time-chart-{{ timeframe }}"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2: MRR and Precision -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🎯 Mean Reciprocal Rank (MRR)</h5>
+                <small class="text-muted">Higher is better (max: 1.0)</small>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="mrr-chart-{{ timeframe }}"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🎯 Precision Over Time</h5>
+                <small class="text-muted">Based on user feedback</small>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="precision-chart-{{ timeframe }}"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 3: Methods and Word Cloud -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🔧 Retrieval Methods</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="methods-chart-{{ timeframe }}"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>☁️ Popular Search Terms</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 300px; overflow-y: auto; text-align: center; padding: 20px;">
+                    <div id="wordcloud-{{ timeframe }}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tables Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🔥 Most Popular Queries</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm stats-table">
+                        <thead>
+                            <tr>
+                                <th>Query</th>
+                                <th>Count</th>
+                                <th>Avg Time</th>
+                                <th>Avg Sources</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for query in metrics.popular_queries[:10] %}
+                            <tr>
+                                <td class="text-truncate" style="max-width: 200px;" title="{{ query.query }}">{{ query.query }}</td>
+                                <td><span class="badge badge-custom bg-primary">{{ query.search_count }}</span></td>
+                                <td>{{ "%.0f"|format(query.avg_response_time or 0) }}ms</td>
+                                <td>{{ "%.1f"|format(query.avg_sources or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🏆 Top Performing URLs</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm stats-table">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Shown</th>
+                                <th>Relevant</th>
+                                <th>Precision</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for url in metrics.top_urls[:10] %}
+                            <tr>
+                                <td class="text-truncate" style="max-width: 200px;" title="{{ url.url }}">
+                                    {{ url.url.split('/')[-1] or url.url.split('/')[-2] }}
+                                </td>
+                                <td><span class="badge badge-custom bg-info">{{ url.shown_count }}</span></td>
+                                <td><span class="badge badge-custom bg-success">{{ url.relevant_count }}</span></td>
+                                <td>
+                                    {% if url.precision >= 0.7 %}
+                                        <span class="precision-badge precision-high">{{ "%.1f"|format(url.precision * 100) }}%</span>
+                                    {% elif url.precision >= 0.4 %}
+                                        <span class="precision-badge precision-medium">{{ "%.1f"|format(url.precision * 100) }}%</span>
+                                    {% else %}
+                                        <span class="precision-badge precision-low">{{ "%.1f"|format(url.precision * 100) }}%</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feedback Summary -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>📊 Feedback Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success">{{ metrics.summary_stats.positive_feedback }}</h4>
+                            <p class="text-muted">👍 Positive Feedback</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-danger">{{ metrics.summary_stats.negative_feedback }}</h4>
+                            <p class="text-muted">👎 Negative Feedback</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info">{{ metrics.summary_stats.total_feedback_given }}</h4>
+                            <p class="text-muted">💬 Total Feedback</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            {% set feedback_rate = (metrics.summary_stats.total_feedback_given / metrics.summary_stats.total_requests * 100) if metrics.summary_stats.total_requests > 0 else 0 %}
+                            <h4 class="text-primary">{{ "%.1f"|format(feedback_rate) }}%</h4>
+                            <p class="text-muted">📝 Feedback Rate</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 
