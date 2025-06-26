@@ -810,8 +810,11 @@ class PostgresStorage(BaseStorage):
         WHERE query_analytics_id = %s AND retrieved_url = %s AND rank_position = %s
         """
         
-        self._execute_query(query, (is_relevant, query_analytics_id, url, rank_position))
+        result = self._execute_query(query, (is_relevant, query_analytics_id, url, rank_position), commit=True)
         logger.info(f"Updated relevance for URL {url} at rank {rank_position}: {is_relevant}")
+        
+        # Let's also return the number of rows affected for debugging
+        return result
 
     def get_query_analytics_by_session_query(self, session_id: str, query: str) -> Optional[int]:
         """Find existing query analytics ID by session and query."""
@@ -824,3 +827,288 @@ class PostgresStorage(BaseStorage):
         
         result = self._execute_query(sql_query, (session_id, query), fetch='one')
         return result[0] if result else None
+
+    def get_recent_query_analytics_by_user_query(self, user_id: int, query: str, hours: int = 1) -> Optional[int]:
+        """Find recent query analytics ID by user and query within the last N hours."""
+        sql_query = """
+        SELECT id FROM query_analytics 
+        WHERE user_id = %s AND query = %s 
+        AND timestamp >= NOW() - INTERVAL '%s hours'
+        ORDER BY timestamp DESC 
+        LIMIT 1
+        """
+        
+        result = self._execute_query(sql_query, (user_id, query, hours), fetch='one')
+        return result[0] if result else None
+
+    def get_comprehensive_analytics_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """Get comprehensive analytics metrics for the dashboard."""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        metrics = {}
+        
+        # 1. Requests per day
+        requests_query = """
+        SELECT DATE(timestamp) as date, COUNT(*) as request_count
+        FROM query_analytics 
+        WHERE timestamp >= %s
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+        """
+        raw_requests = self._execute_query(requests_query, (cutoff_date,), fetch='all')
+        metrics['requests_per_day'] = [
+            {'date': row[0].strftime('%Y-%m-%d'), 'count': int(row[1])}
+            for row in raw_requests
+        ] if raw_requests else []
+        
+        # 2. Average response time per day
+        response_time_query = """
+        SELECT DATE(timestamp) as date, 
+               AVG(response_time_ms) as avg_response_time,
+               COUNT(*) as request_count
+        FROM query_analytics 
+        WHERE timestamp >= %s AND response_time_ms IS NOT NULL
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+        """
+        raw_response_times = self._execute_query(response_time_query, (cutoff_date,), fetch='all')
+        metrics['avg_response_time_per_day'] = [
+            {
+                'date': row[0].strftime('%Y-%m-%d'), 
+                'avg_response_time': float(row[1]) if row[1] else 0,
+                'request_count': int(row[2])
+            }
+            for row in raw_response_times
+        ] if raw_response_times else []
+        
+        # 3. Most searched phrases/queries
+        popular_queries_query = """
+        SELECT query, COUNT(*) as search_count,
+               AVG(response_time_ms) as avg_response_time,
+               AVG(num_sources_found) as avg_sources
+        FROM query_analytics 
+        WHERE timestamp >= %s
+        GROUP BY query
+        ORDER BY search_count DESC
+        LIMIT 20
+        """
+        raw_popular_queries = self._execute_query(popular_queries_query, (cutoff_date,), fetch='all')
+        metrics['popular_queries'] = [
+            {
+                'query': row[0],
+                'search_count': int(row[1]),
+                'avg_response_time': float(row[2]) if row[2] else 0,
+                'avg_sources': float(row[3]) if row[3] else 0
+            }
+            for row in raw_popular_queries
+        ] if raw_popular_queries else []
+        
+        # 4. Popular search terms (word cloud data)
+        popular_terms_query = """
+        SELECT unnest(query_tokens) as term, COUNT(*) as frequency
+        FROM query_analytics 
+        WHERE timestamp >= %s AND query_tokens IS NOT NULL
+        GROUP BY term
+        HAVING COUNT(*) > 1
+        ORDER BY frequency DESC
+        LIMIT 50
+        """
+        raw_popular_terms = self._execute_query(popular_terms_query, (cutoff_date,), fetch='all')
+        metrics['popular_terms'] = [
+            {'term': row[0], 'frequency': int(row[1])}
+            for row in raw_popular_terms
+        ] if raw_popular_terms else []
+        
+        # 5. Retrieval method distribution
+        retrieval_methods_query = """
+        SELECT retrieval_method, COUNT(*) as count,
+               AVG(response_time_ms) as avg_response_time
+        FROM query_analytics 
+        WHERE timestamp >= %s AND retrieval_method IS NOT NULL
+        GROUP BY retrieval_method
+        ORDER BY count DESC
+        """
+        raw_retrieval_methods = self._execute_query(retrieval_methods_query, (cutoff_date,), fetch='all')
+        metrics['retrieval_methods'] = [
+            {
+                'method': row[0],
+                'count': int(row[1]),
+                'avg_response_time': float(row[2]) if row[2] else 0
+            }
+            for row in raw_retrieval_methods
+        ] if raw_retrieval_methods else []
+        
+        # 6. MRR Calculation (improved)
+        mrr_query = """
+        WITH ranked_results AS (
+            SELECT 
+                qa.id,
+                qa.query,
+                qa.timestamp::date as date,
+                ra.rank_position,
+                ra.similarity_score,
+                ra.is_relevant,
+                -- Use actual relevance feedback when available, otherwise assume top 3 are relevant
+                CASE 
+                    WHEN ra.is_relevant = true THEN 1.0 / ra.rank_position
+                    WHEN ra.is_relevant = false THEN 0
+                    WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position 
+                    ELSE 0 
+                END as reciprocal_rank
+            FROM query_analytics qa
+            JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+            WHERE qa.timestamp >= %s
+        ),
+        mrr_by_query AS (
+            SELECT 
+                id, query, date,
+                MAX(reciprocal_rank) as max_reciprocal_rank
+            FROM ranked_results
+            GROUP BY id, query, date
+        )
+        SELECT 
+            date,
+            AVG(max_reciprocal_rank) as mrr,
+            COUNT(*) as query_count
+        FROM mrr_by_query
+        GROUP BY date
+        ORDER BY date
+        """
+        mrr_over_time = self._execute_query(mrr_query, (cutoff_date,), fetch='all')
+        
+        # Overall MRR
+        overall_mrr_query = """
+        WITH ranked_results AS (
+            SELECT 
+                qa.id,
+                CASE 
+                    WHEN ra.is_relevant = true THEN 1.0 / ra.rank_position
+                    WHEN ra.is_relevant = false THEN 0
+                    WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position 
+                    ELSE 0 
+                END as reciprocal_rank
+            FROM query_analytics qa
+            JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+            WHERE qa.timestamp >= %s
+        ),
+        mrr_by_query AS (
+            SELECT id, MAX(reciprocal_rank) as max_reciprocal_rank
+            FROM ranked_results
+            GROUP BY id
+        )
+        SELECT AVG(max_reciprocal_rank) as overall_mrr
+        FROM mrr_by_query
+        """
+        overall_mrr_result = self._execute_query(overall_mrr_query, (cutoff_date,), fetch='one')
+        
+        # Convert MRR data to JSON-serializable format
+        mrr_over_time_formatted = [
+            {
+                'date': row[0].strftime('%Y-%m-%d'),
+                'mrr': float(row[1]) if row[1] else 0,
+                'query_count': int(row[2])
+            }
+            for row in mrr_over_time
+        ] if mrr_over_time else []
+        
+        metrics['mrr_metrics'] = {
+            'mrr_over_time': mrr_over_time_formatted,
+            'overall_mrr': float(overall_mrr_result[0]) if overall_mrr_result and overall_mrr_result[0] else 0
+        }
+        
+        # 7. Top performing URLs
+        top_urls_query = """
+        SELECT ra.retrieved_url,
+               COUNT(*) as shown_count,
+               COUNT(CASE WHEN ra.is_relevant = true THEN 1 END) as relevant_count,
+               COUNT(CASE WHEN ra.is_relevant = false THEN 1 END) as not_relevant_count,
+               AVG(ra.rank_position) as avg_rank,
+               AVG(ra.similarity_score) as avg_similarity
+        FROM retrieval_analytics ra
+        WHERE ra.timestamp >= %s
+        GROUP BY ra.retrieved_url
+        HAVING COUNT(*) >= 2  -- Only URLs shown at least twice
+        ORDER BY relevant_count DESC, shown_count DESC
+        LIMIT 20
+        """
+        raw_top_urls = self._execute_query(top_urls_query, (cutoff_date,), fetch='all')
+        metrics['top_urls'] = [
+            {
+                'url': row[0],
+                'shown_count': int(row[1]),
+                'relevant_count': int(row[2]),
+                'not_relevant_count': int(row[3]),
+                'avg_rank': float(row[4]) if row[4] else 0,
+                'avg_similarity': float(row[5]) if row[5] else 0,
+                'precision': float(row[2]) / float(row[1]) if row[1] > 0 else 0  # relevant/shown
+            }
+            for row in raw_top_urls
+        ] if raw_top_urls else []
+        
+        # 8. Precision metrics
+        precision_query = """
+        SELECT DATE(qa.timestamp) as date,
+               COUNT(DISTINCT qa.id) as total_queries,
+               COUNT(ra.id) as total_results_shown,
+               COUNT(CASE WHEN ra.is_relevant = true THEN 1 END) as relevant_results,
+               COUNT(CASE WHEN ra.is_relevant IS NOT NULL THEN 1 END) as results_with_feedback,
+               CASE 
+                   WHEN COUNT(CASE WHEN ra.is_relevant IS NOT NULL THEN 1 END) > 0 
+                   THEN COUNT(CASE WHEN ra.is_relevant = true THEN 1 END)::float / 
+                        COUNT(CASE WHEN ra.is_relevant IS NOT NULL THEN 1 END)
+                   ELSE NULL 
+               END as precision
+        FROM query_analytics qa
+        LEFT JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+        WHERE qa.timestamp >= %s
+        GROUP BY DATE(qa.timestamp)
+        ORDER BY date
+        """
+        raw_precision_metrics = self._execute_query(precision_query, (cutoff_date,), fetch='all')
+        metrics['precision_metrics'] = [
+            {
+                'date': row[0].strftime('%Y-%m-%d'),
+                'total_queries': int(row[1]),
+                'total_results_shown': int(row[2]),
+                'relevant_results': int(row[3]),
+                'results_with_feedback': int(row[4]),
+                'precision': float(row[5]) if row[5] is not None else 0
+            }
+            for row in raw_precision_metrics
+        ] if raw_precision_metrics else []
+        
+        # 9. Summary statistics
+        summary_query = """
+        SELECT 
+            COUNT(DISTINCT qa.id) as total_requests,
+            COUNT(DISTINCT qa.query) as total_unique_queries,
+            AVG(qa.response_time_ms) as avg_response_time,
+            COUNT(CASE WHEN ra.is_relevant IS NOT NULL THEN 1 END) as total_feedback_given,
+            COUNT(CASE WHEN ra.is_relevant = true THEN 1 END) as positive_feedback,
+            COUNT(CASE WHEN ra.is_relevant = false THEN 1 END) as negative_feedback
+        FROM query_analytics qa
+        LEFT JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
+        WHERE qa.timestamp >= %s
+        """
+        summary_result = self._execute_query(summary_query, (cutoff_date,), fetch='one')
+        
+        if summary_result:
+            metrics['summary_stats'] = {
+                'total_requests': int(summary_result[0]) if summary_result[0] else 0,
+                'total_unique_queries': int(summary_result[1]) if summary_result[1] else 0,
+                'avg_response_time': round(float(summary_result[2]) if summary_result[2] else 0, 2),
+                'total_feedback_given': int(summary_result[3]) if summary_result[3] else 0,
+                'positive_feedback': int(summary_result[4]) if summary_result[4] else 0,
+                'negative_feedback': int(summary_result[5]) if summary_result[5] else 0
+            }
+        else:
+            metrics['summary_stats'] = {
+                'total_requests': 0,
+                'total_unique_queries': 0,
+                'avg_response_time': 0,
+                'total_feedback_given': 0,
+                'positive_feedback': 0,
+                'negative_feedback': 0
+            }
+        
+        return metrics
