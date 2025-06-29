@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     admin_password: str = Field(env='ADMIN_PASSWORD', default='password')
     
     # --------------------------------------------------------------------------
+    # Sentry Settings
+    # --------------------------------------------------------------------------
+    sentry_dsn: Optional[str] = Field(env='SENTRY_DSN', default=None)
+    sentry_environment: str = Field(env='SENTRY_ENVIRONMENT', default='development')
+    sentry_release: Optional[str] = Field(env='SENTRY_RELEASE', default=None)
+    sentry_sample_rate: float = Field(env='SENTRY_SAMPLE_RATE', default=1.0)
+    sentry_traces_sample_rate: float = Field(env='SENTRY_TRACES_SAMPLE_RATE', default=0.1)
+    
+    # --------------------------------------------------------------------------
     # Langfuse Settings
     # --------------------------------------------------------------------------
     langfuse_host: Optional[str] = Field(env='LANGFUSE_HOST', default="https://cloud.langfuse.com")
