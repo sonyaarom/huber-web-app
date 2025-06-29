@@ -10,6 +10,7 @@
     <div class="card mb-4">
         <div class="card-body">
             <ul class="nav nav-tabs" id="timeframeTabs" role="tablist">
+
                 <li class="nav-item">
                     <a class="nav-link active" id="7d-tab" data-toggle="tab" href="#7d-content" role="tab">
                         📅 Last 7 Days
@@ -19,6 +20,7 @@
                     <a class="nav-link" id="30d-tab" data-toggle="tab" href="#30d-content" role="tab">
                         📅 Last 30 Days
                     </a>
+
                 </li>
             </ul>
 
@@ -317,7 +319,6 @@ function createWordCloud(timeframe, metrics) {
         return `<span style="font-size: ${size}px; opacity: ${opacity}; margin: 5px; display: inline-block;">${item.term}</span>`;
     }).join('');
 }
-
 
 </script>
 {% endblock %} 

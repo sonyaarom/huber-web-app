@@ -898,8 +898,6 @@ class PostgresStorage(BaseStorage):
                 'query': row[0],
                 'search_count': int(row[1]),
                 'avg_response_time': round(float(row[2]) / 1000, 2) if row[2] else 0,  # Convert ms to seconds
-                'avg_sources': float(row[3]) if row[3] else 0
-            }
             for row in raw_popular_queries
         ] if raw_popular_queries else []
         
@@ -953,7 +951,6 @@ class PostgresStorage(BaseStorage):
                 ra.rank_position,
                 ra.similarity_score,
                 ra.is_relevant,
-                -- Only use actual relevance feedback (no assumptions)
                 CASE 
                     WHEN ra.is_relevant = true THEN 1.0 / ra.rank_position
                     WHEN ra.is_relevant = false THEN 0
@@ -992,7 +989,7 @@ class PostgresStorage(BaseStorage):
                 END as reciprocal_rank
             FROM query_analytics qa
             JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
-            WHERE qa.timestamp >= %s AND ra.is_relevant IS NOT NULL  -- Only queries with feedback
+            WHERE qa.timestamp >= %s AND ra.is_relevant IS NOT NULL  
         ),
         mrr_by_query AS (
             SELECT id, MAX(reciprocal_rank) as max_reciprocal_rank
