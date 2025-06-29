@@ -300,6 +300,7 @@ def evaluation_dashboard():
 @bp.route('/submit_feedback', methods=['POST'])
 def submit_feedback():
     """Handle user feedback submission."""
+<<<<<<< HEAD
     with sentry_sdk.start_transaction(name="submit_feedback", op="http"):
         try:
             data = request.get_json()
@@ -376,6 +377,77 @@ def analytics_dashboard():
                              metrics_30d=metrics_30d)
         
     except Exception as e:
+=======
+    try:
+        data = request.get_json()
+        
+        # Get session ID or generate one
+        session_id = session.get('session_id')
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+        
+        # Store feedback data
+        feedback_data = {
+            'session_id': session_id,
+            'user_id': current_user.id if current_user.is_authenticated else None,
+            'query': data.get('query'),
+            'generated_answer': data.get('generated_answer'),
+            'prompt_used': data.get('prompt_used'),
+            'retrieval_method': data.get('retrieval_method'),
+            'sources_urls': data.get('sources_urls', []),
+            'rating': data.get('rating'),  # 'positive' or 'negative'
+            'feedback_comment': data.get('feedback_comment'),
+            'response_time_ms': data.get('response_time_ms')
+        }
+        
+        storage = PostgresStorage()
+        feedback_id = storage.store_user_feedback(feedback_data)
+        
+        logger.info(f"Feedback stored with ID: {feedback_id}")
+        
+        return jsonify({
+            'success': True,
+            'feedback_id': feedback_id,
+            'message': 'Thank you for your feedback!'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error storing feedback: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error storing feedback: {str(e)}'
+        }), 500
+
+# Analytics dashboard endpoint
+@bp.route('/analytics')
+@login_required
+def analytics_dashboard():
+    """Display comprehensive analytics dashboard."""
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('main.chat'))
+    
+    try:
+        storage = PostgresStorage()
+        
+        # Get comprehensive metrics for different time periods
+        logger.info("Fetching 7-day metrics...")
+        metrics_7d = storage.get_comprehensive_analytics_metrics(days=7)
+        logger.info(f"7-day metrics keys: {list(metrics_7d.keys())}")
+        
+        logger.info("Fetching 30-day metrics...")
+        metrics_30d = storage.get_comprehensive_analytics_metrics(days=30)
+        logger.info(f"30-day metrics keys: {list(metrics_30d.keys())}")
+        
+        logger.info("Rendering template...")
+        return render_template('comprehensive_analytics.html', 
+                             title='Comprehensive Analytics Dashboard',
+                             metrics_7d=metrics_7d,
+                             metrics_30d=metrics_30d)
+        
+    except Exception as e:
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
         logger.error(f"Error loading analytics dashboard: {e}")
         logger.error(f"Error traceback: {traceback.format_exc()}")
         flash(f'Error loading analytics: {str(e)}', 'danger')
@@ -686,6 +758,7 @@ def handle_message(message):
     logger.info(f"Received message: {message}")
     start_time = time.time()
     
+<<<<<<< HEAD
     with sentry_sdk.start_transaction(name="chat_message", op="websocket"):
         # Set user context for Sentry
         if current_user.is_authenticated:
@@ -788,3 +861,99 @@ def handle_message(message):
             logger.error(f"Error processing message: {e}")
             sentry_sdk.capture_exception(e)
             emit('error', {'error': str(e)})
+=======
+    try:
+        # Get session ID or generate one
+        session_id = session.get('session_id')
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+
+        ner_filters = None
+        if settings.use_ner:
+            ner_filters = extract_entities(message)
+            logger.info(f"Extracted NER filters: {ner_filters}")
+
+        # Get both the answer and the URLs from the RAG function
+        response_data = rag_main_func(message, ner_filters=ner_filters)
+        
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        logger.info(f"RAG function returned: {type(response_data)} - {response_data}")
+        
+        # Store query analytics
+        storage = PostgresStorage()
+        query_data = {
+            'session_id': session_id,
+            'user_id': current_user.id if current_user.is_authenticated else None,
+            'query': message,
+            'has_answer': bool(response_data.get('answer') if isinstance(response_data, dict) else bool(response_data)),
+            'response_time_ms': response_time_ms,
+            'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+            'num_sources_found': len(response_data.get('sources', [])) if isinstance(response_data, dict) else 0
+        }
+        
+        query_analytics_id = storage.store_query_analytics(query_data)
+        
+        # Store retrieval analytics if we have URLs
+        if isinstance(response_data, dict) and response_data.get('sources'):
+            source_scores = response_data.get('source_scores', {})
+            retrieval_results = [
+                {
+                    'url': url,
+                    'rank_position': idx + 1,
+                    'similarity_score': source_scores.get(url)
+                }
+                for idx, url in enumerate(response_data['sources'])
+            ]
+            storage.store_retrieval_analytics(query_analytics_id, retrieval_results)
+        
+        # Check if response_data is in the expected format
+        if isinstance(response_data, dict) and 'answer' in response_data:
+            # Add metadata for feedback collection
+            response_data['query'] = message
+            response_data['session_id'] = session_id
+            response_data['response_time_ms'] = response_time_ms
+            response_data['query_analytics_id'] = query_analytics_id
+            response_data['retrieval_method'] = 'hybrid' if settings.use_hybrid_search else 'vector'
+            
+            # Rename 'urls' to 'sources' for consistency if needed
+            if 'urls' in response_data and 'sources' not in response_data:
+                response_data['sources'] = response_data['urls']
+            
+            # Emit a single event with both answer and URLs
+            emit('response', response_data)
+            logger.info(f"Sending response with {len(response_data.get('sources', []))} sources: {response_data['answer'][:100]}...")
+        elif isinstance(response_data, str):
+            # If it's just a string, emit it as a message
+            response_with_metadata = {
+                'answer': response_data,
+                'query': message,
+                'session_id': session_id,
+                'response_time_ms': response_time_ms,
+                'query_analytics_id': query_analytics_id,
+                'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+                'sources': []
+            }
+            emit('response', response_with_metadata)
+            logger.info(f"Sending message: {response_data[:100]}...")
+        else:
+            # Fallback: convert to string and send as message
+            response_str = str(response_data)
+            response_with_metadata = {
+                'answer': response_str,
+                'query': message,
+                'session_id': session_id,
+                'response_time_ms': response_time_ms,
+                'query_analytics_id': query_analytics_id,
+                'retrieval_method': 'hybrid' if settings.use_hybrid_search else 'vector',
+                'sources': []
+            }
+            emit('response', response_with_metadata)
+            logger.info(f"Sending converted message: {response_str[:100]}...")
+        
+    except Exception as e:
+        logger.error(f"Error processing message: {e}")
+        emit('error', {'error': str(e)})
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2

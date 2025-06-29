@@ -65,6 +65,7 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
     """
     start_time = time.time()
     
+<<<<<<< HEAD
     with sentry_sdk.start_transaction(name="rag_pipeline", op="rag"):
         try:
             # Capture the overall RAG operation
@@ -132,6 +133,30 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
             # Capture the error with context
             sentry_sdk.capture_exception(e)
             raise
+=======
+    # Process the retrieved documents
+    context = " ".join([doc['content'] for doc in retrieved_docs])
+    
+    # Generate the answer using the LLM
+    answer = llm_main_func(question, context)
+    
+    sources = [doc.get('url') for doc in retrieved_docs if doc.get('url')]
+    
+    # Extract similarity scores for each source URL
+    source_scores = {}
+    for doc in retrieved_docs:
+        if doc.get('url'):
+            # Get the best available score (reranked_score > score > similarity)
+            score = doc.get('reranked_score') or doc.get('score') or doc.get('similarity') or 0.0
+            # Convert numpy types to Python float
+            source_scores[doc['url']] = float(score)
+    
+    return {
+        "answer": answer, 
+        "sources": list(set(sources)),
+        "source_scores": source_scores
+    }
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
 
 if __name__ == '__main__':
     # Example usage

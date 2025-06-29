@@ -4,12 +4,26 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">📊 Comprehensive Analytics Dashboard</h1>
+<<<<<<< HEAD
+=======
+        <div class="dropdown">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown">
+                📁 Export Data
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" onclick="exportChartData()">📊 Chart Data (JSON)</a></li>
+                <li><a class="dropdown-item" href="#" onclick="exportCSV()">📄 Raw Data (CSV)</a></li>
+                <li><a class="dropdown-item" href="#" onclick="window.print()">🖨️ Print Dashboard</a></li>
+            </ul>
+        </div>
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
     </div>
 
     <!-- Time Period Tabs -->
     <div class="card mb-4">
         <div class="card-body">
             <ul class="nav nav-tabs" id="timeframeTabs" role="tablist">
+<<<<<<< HEAD
                 <li class="nav-item">
                     <a class="nav-link active" id="7d-tab" data-toggle="tab" href="#7d-content" role="tab">
                         📅 Last 7 Days
@@ -19,6 +33,17 @@
                     <a class="nav-link" id="30d-tab" data-toggle="tab" href="#30d-content" role="tab">
                         📅 Last 30 Days
                     </a>
+=======
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="7d-tab" data-bs-toggle="tab" data-bs-target="#7d-content" type="button">
+                        📅 Last 7 Days
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="30d-tab" data-bs-toggle="tab" data-bs-target="#30d-content" type="button">
+                        📅 Last 30 Days
+                    </button>
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
                 </li>
             </ul>
 
@@ -116,7 +141,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCharts('7d');
     
     // Tab switching
+<<<<<<< HEAD
     document.querySelectorAll('[data-toggle="tab"]').forEach(tab => {
+=======
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
         tab.addEventListener('shown.bs.tab', function(e) {
             const timeframe = e.target.id.replace('-tab', '');
             currentTimeframe = timeframe;
@@ -140,7 +169,11 @@ function initializeCharts(timeframe) {
     createResponseTimeChart(timeframe, metrics);
     createMRRChart(timeframe, metrics);
     createPrecisionChart(timeframe, metrics);
+<<<<<<< HEAD
     createEndpointUsageChart(timeframe, metrics);
+=======
+    createRetrievalMethodsChart(timeframe, metrics);
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
     createWordCloud(timeframe, metrics);
 }
 
@@ -181,14 +214,22 @@ function createResponseTimeChart(timeframe, metrics) {
     
     const data = metrics.avg_response_time_per_day || [];
     const dates = data.map(item => item.date);
+<<<<<<< HEAD
     const times = data.map(item => item.avg_response_time);
+=======
+    const times = data.map(item => Math.round(item.avg_response_time));
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
     
     charts[`response-time-${timeframe}`] = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: dates,
             datasets: [{
+<<<<<<< HEAD
                 label: 'Avg Response Time (seconds)',
+=======
+                label: 'Avg Response Time (ms)',
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
                 data: times,
                 backgroundColor: 'rgba(118, 75, 162, 0.8)',
                 borderColor: '#764ba2',
@@ -273,6 +314,7 @@ function createPrecisionChart(timeframe, metrics) {
     });
 }
 
+<<<<<<< HEAD
 function createEndpointUsageChart(timeframe, metrics) {
     const ctx = document.getElementById(`endpoints-chart-${timeframe}`);
     if (!ctx) return;
@@ -285,6 +327,20 @@ function createEndpointUsageChart(timeframe, metrics) {
         type: 'doughnut',
         data: {
             labels: endpoints,
+=======
+function createRetrievalMethodsChart(timeframe, metrics) {
+    const ctx = document.getElementById(`methods-chart-${timeframe}`);
+    if (!ctx) return;
+    
+    const data = metrics.retrieval_methods || [];
+    const methods = data.map(item => item.method);
+    const counts = data.map(item => item.count);
+    
+    charts[`methods-${timeframe}`] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: methods,
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
             datasets: [{
                 data: counts,
                 backgroundColor: [
@@ -318,6 +374,25 @@ function createWordCloud(timeframe, metrics) {
     }).join('');
 }
 
+<<<<<<< HEAD
 
+=======
+// Export functions
+function exportChartData() {
+    const metrics = currentTimeframe === '7d' ? {{ metrics_7d|tojson }} : {{ metrics_30d|tojson }};
+    const dataStr = JSON.stringify(metrics, null, 2);
+    const dataBlob = new Blob([dataStr], {type:'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `analytics_${currentTimeframe}_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+
+function exportCSV() {
+    // Implementation for CSV export would go here
+    alert('CSV export functionality coming soon!');
+}
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
 </script>
 {% endblock %} 

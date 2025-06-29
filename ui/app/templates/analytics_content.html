@@ -14,7 +14,11 @@
     </div>
     <div class="col-md-3">
         <div class="metrics-card">
+<<<<<<< HEAD
             <div class="metric-value">{{ "%.2f"|format(metrics.summary_stats.avg_response_time) }}s</div>
+=======
+            <div class="metric-value">{{ "%.0f"|format(metrics.summary_stats.avg_response_time) }}ms</div>
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
             <div class="metric-label">⚡ Avg Response Time</div>
         </div>
     </div>
@@ -89,11 +93,19 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
+<<<<<<< HEAD
                 <h5>🔧 Endpoint Usage</h5>
             </div>
             <div class="card-body">
                 <div class="chart-container">
                     <canvas id="endpoints-chart-{{ timeframe }}"></canvas>
+=======
+                <h5>🔧 Retrieval Methods</h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="methods-chart-{{ timeframe }}"></canvas>
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
                 </div>
             </div>
         </div>
@@ -135,7 +147,11 @@
                             <tr>
                                 <td class="text-truncate" style="max-width: 200px;" title="{{ query.query }}">{{ query.query }}</td>
                                 <td><span class="badge badge-custom bg-primary">{{ query.search_count }}</span></td>
+<<<<<<< HEAD
                                 <td>{{ "%.2f"|format(query.avg_response_time or 0) }}s</td>
+=======
+                                <td>{{ "%.0f"|format(query.avg_response_time or 0) }}ms</td>
+>>>>>>> 7589e61585774d979e46db43f6a7e0a43545d4d2
                                 <td>{{ "%.1f"|format(query.avg_sources or 0) }}</td>
                             </tr>
                             {% endfor %}
