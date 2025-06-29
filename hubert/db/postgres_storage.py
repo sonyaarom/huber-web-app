@@ -921,11 +921,16 @@ class PostgresStorage(BaseStorage):
         
         # 5. Endpoint usage distribution (search vs chat)
         endpoint_usage_query = """
-        SELECT retrieval_method, COUNT(*) as count,
-               AVG(response_time_ms) as avg_response_time
+        SELECT 
+            CASE 
+                WHEN retrieval_method = 'search' THEN 'search'
+                ELSE 'chat'
+            END as endpoint_type,
+            COUNT(*) as count,
+            AVG(response_time_ms) as avg_response_time
         FROM query_analytics 
         WHERE timestamp >= %s AND retrieval_method IS NOT NULL
-        GROUP BY retrieval_method
+        GROUP BY endpoint_type
         ORDER BY count DESC
         """
         raw_endpoint_usage = self._execute_query(endpoint_usage_query, (cutoff_date,), fetch='all')
