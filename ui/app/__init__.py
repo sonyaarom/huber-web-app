@@ -14,6 +14,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("=== FLASK APP INITIALIZATION START ===")
 
+# Initialize Sentry as early as possible
+from hubert.common.monitoring import init_sentry
+sentry_initialized = init_sentry()
+if sentry_initialized:
+    logger.info("✅ Sentry APM initialized successfully")
+else:
+    logger.info("⚠️  Sentry APM not initialized (DSN not configured)")
+
 from ui.app.views.main import bp as main_blueprint
 from ui.app.evaluation import bp as evaluation_blueprint
 from hubert.db.models import User

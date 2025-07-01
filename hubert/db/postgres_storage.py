@@ -875,7 +875,7 @@ class PostgresStorage(BaseStorage):
         metrics['avg_response_time_per_day'] = [
             {
                 'date': row[0].strftime('%Y-%m-%d'), 
-                'avg_response_time': float(row[1]) if row[1] else 0,
+                'avg_response_time': round(float(row[1]) / 1000, 2) if row[1] else 0,  # Convert ms to seconds
                 'request_count': int(row[2])
             }
             for row in raw_response_times
@@ -897,7 +897,7 @@ class PostgresStorage(BaseStorage):
             {
                 'query': row[0],
                 'search_count': int(row[1]),
-                'avg_response_time': float(row[2]) if row[2] else 0,
+                'avg_response_time': round(float(row[2]) / 1000, 2) if row[2] else 0,  # Convert ms to seconds
                 'avg_sources': float(row[3]) if row[3] else 0
             }
             for row in raw_popular_queries
@@ -919,26 +919,31 @@ class PostgresStorage(BaseStorage):
             for row in raw_popular_terms
         ] if raw_popular_terms else []
         
-        # 5. Retrieval method distribution
-        retrieval_methods_query = """
-        SELECT retrieval_method, COUNT(*) as count,
-               AVG(response_time_ms) as avg_response_time
+        # 5. Endpoint usage distribution (search vs chat)
+        endpoint_usage_query = """
+        SELECT 
+            CASE 
+                WHEN retrieval_method = 'search' THEN 'search'
+                ELSE 'chat'
+            END as endpoint_type,
+            COUNT(*) as count,
+            AVG(response_time_ms) as avg_response_time
         FROM query_analytics 
         WHERE timestamp >= %s AND retrieval_method IS NOT NULL
-        GROUP BY retrieval_method
+        GROUP BY endpoint_type
         ORDER BY count DESC
         """
-        raw_retrieval_methods = self._execute_query(retrieval_methods_query, (cutoff_date,), fetch='all')
-        metrics['retrieval_methods'] = [
+        raw_endpoint_usage = self._execute_query(endpoint_usage_query, (cutoff_date,), fetch='all')
+        metrics['endpoint_usage'] = [
             {
-                'method': row[0],
+                'endpoint': row[0],
                 'count': int(row[1]),
-                'avg_response_time': float(row[2]) if row[2] else 0
+                'avg_response_time': round(float(row[2]) / 1000, 2) if row[2] else 0  # Convert ms to seconds
             }
-            for row in raw_retrieval_methods
-        ] if raw_retrieval_methods else []
+            for row in raw_endpoint_usage
+        ] if raw_endpoint_usage else []
         
-        # 6. MRR Calculation (improved)
+        # 6. MRR Calculation (based on actual user feedback only)
         mrr_query = """
         WITH ranked_results AS (
             SELECT 
@@ -948,16 +953,15 @@ class PostgresStorage(BaseStorage):
                 ra.rank_position,
                 ra.similarity_score,
                 ra.is_relevant,
-                -- Use actual relevance feedback when available, otherwise assume top 3 are relevant
+                -- Only use actual relevance feedback (no assumptions)
                 CASE 
                     WHEN ra.is_relevant = true THEN 1.0 / ra.rank_position
                     WHEN ra.is_relevant = false THEN 0
-                    WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position 
-                    ELSE 0 
+                    ELSE NULL  -- No feedback = exclude from MRR calculation
                 END as reciprocal_rank
             FROM query_analytics qa
             JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
-            WHERE qa.timestamp >= %s
+            WHERE qa.timestamp >= %s AND ra.is_relevant IS NOT NULL  -- Only queries with feedback
         ),
         mrr_by_query AS (
             SELECT 
@@ -984,12 +988,11 @@ class PostgresStorage(BaseStorage):
                 CASE 
                     WHEN ra.is_relevant = true THEN 1.0 / ra.rank_position
                     WHEN ra.is_relevant = false THEN 0
-                    WHEN ra.rank_position <= 3 THEN 1.0 / ra.rank_position 
-                    ELSE 0 
+                    ELSE NULL  -- No feedback = exclude from MRR calculation
                 END as reciprocal_rank
             FROM query_analytics qa
             JOIN retrieval_analytics ra ON qa.id = ra.query_analytics_id
-            WHERE qa.timestamp >= %s
+            WHERE qa.timestamp >= %s AND ra.is_relevant IS NOT NULL  -- Only queries with feedback
         ),
         mrr_by_query AS (
             SELECT id, MAX(reciprocal_rank) as max_reciprocal_rank
@@ -1096,7 +1099,7 @@ class PostgresStorage(BaseStorage):
             metrics['summary_stats'] = {
                 'total_requests': int(summary_result[0]) if summary_result[0] else 0,
                 'total_unique_queries': int(summary_result[1]) if summary_result[1] else 0,
-                'avg_response_time': round(float(summary_result[2]) if summary_result[2] else 0, 2),
+                'avg_response_time': round(float(summary_result[2]) / 1000 if summary_result[2] else 0, 2),  # Convert ms to seconds
                 'total_feedback_given': int(summary_result[3]) if summary_result[3] else 0,
                 'positive_feedback': int(summary_result[4]) if summary_result[4] else 0,
                 'negative_feedback': int(summary_result[5]) if summary_result[5] else 0

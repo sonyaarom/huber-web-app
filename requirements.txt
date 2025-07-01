@@ -53,9 +53,11 @@ fastapi>=0.115.13
 tqdm>=4.67.1
 tenacity>=8.2.0
 
-# Monitoring
+# Monitoring and testing
 langfuse>=3.0.3
 wandb
+sentry-sdk[flask,sqlalchemy]>=1.38.0
+pytest==8.4.1
 
 # Evaluation metrics
 rouge_score>=0.1.2

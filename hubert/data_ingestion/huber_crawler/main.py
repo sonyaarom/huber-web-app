@@ -124,59 +124,84 @@ def main():
     Main function to process the sitemap and update the database.
     Now using the abstract storage layer.
     """
-    metrics = CrawlerMetrics()
-    logger.info("🚀 Starting sitemap processing...")
+    # Initialize Sentry for this process
+    from hubert.common.monitoring import init_sentry, capture_crawler_metrics
+    import sentry_sdk
     
-    sitemap_start_time = time.time()
-    records = {}
-    try:
-        records = process_sitemap(
-            settings.url,
-            settings.pattern,
-            settings.exclude_extensions,
-            settings.exclude_patterns,
-            settings.include_patterns,
-            settings.allowed_base_url
-        )
-        metrics.sitemap_processing_time = time.time() - sitemap_start_time
-        logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
-    except Exception as e:
-        logger.error(f"Fatal error processing sitemap: {e}", exc_info=True)
-        metrics.errors += 1
-        metrics.save_to_file()
-        sys.exit(1)
-
-    storage = PostgresStorage()
-    try:
-        deactivated_uids = process_page_raw_records(storage, records, metrics)
+    init_sentry()
+    
+    with sentry_sdk.start_transaction(name="crawler_main", op="crawler"):
+        metrics = CrawlerMetrics()
+        logger.info("🚀 Starting sitemap processing...")
         
-        # Immediately purge the deactivated records from all related tables
-        if deactivated_uids:
-            logger.info(f"Starting immediate garbage collection for {len(deactivated_uids)} deactivated UIDs...")
-            purge_start_time = time.time()
-            try:
-                total_deleted = storage.purge_specific_inactive_records(deactivated_uids)
-                purge_time = time.time() - purge_start_time
-                logger.info(f"Garbage collection completed in {purge_time:.2f} sec. Total records deleted: {total_deleted}")
-                # Add purge metrics if desired
-                # metrics.purge_time = purge_time
-                # metrics.records_purged = total_deleted
-            except Exception as e:
-                logger.error(f"Error during immediate garbage collection: {e}", exc_info=True)
-                metrics.errors += 1
-        else:
-            logger.info("No records to purge - skipping garbage collection.")
+        sitemap_start_time = time.time()
+        records = {}
+        try:
+            with sentry_sdk.start_span(op="sitemap", description="Process sitemap"):
+                records = process_sitemap(
+                    settings.url,
+                    settings.pattern,
+                    settings.exclude_extensions,
+                    settings.exclude_patterns,
+                    settings.include_patterns,
+                    settings.allowed_base_url
+                )
+            metrics.sitemap_processing_time = time.time() - sitemap_start_time
+            logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
             
-    except Exception as e:
-        logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
-        metrics.errors += 1
-    finally:
-        storage.close()
-    
-    metrics.save_to_file()
-    print("\n" + "="*50)
-    logger.info(f"Crawler run finished in {time.time() - metrics.start_time:.2f} seconds.")
-    print("="*50 + "\n")
+            # Capture sitemap processing metrics
+            sentry_sdk.set_measurement("sitemap_processing_time", metrics.sitemap_processing_time, "second")
+            sentry_sdk.set_measurement("sitemap_records_found", len(records))
+            
+        except Exception as e:
+            logger.error(f"Fatal error processing sitemap: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+            metrics.errors += 1
+            metrics.save_to_file()
+            sys.exit(1)
+
+        storage = PostgresStorage()
+        try:
+            with sentry_sdk.start_span(op="database", description="Process page records"):
+                deactivated_uids = process_page_raw_records(storage, records, metrics)
+            
+            # Immediately purge the deactivated records from all related tables
+            if deactivated_uids:
+                logger.info(f"Starting immediate garbage collection for {len(deactivated_uids)} deactivated UIDs...")
+                purge_start_time = time.time()
+                try:
+                    with sentry_sdk.start_span(op="database", description="Garbage collection"):
+                        total_deleted = storage.purge_specific_inactive_records(deactivated_uids)
+                    purge_time = time.time() - purge_start_time
+                    logger.info(f"Garbage collection completed in {purge_time:.2f} sec. Total records deleted: {total_deleted}")
+                    sentry_sdk.set_measurement("purge_time", purge_time, "second")
+                    sentry_sdk.set_measurement("records_purged", total_deleted)
+                except Exception as e:
+                    logger.error(f"Error during immediate garbage collection: {e}", exc_info=True)
+                    sentry_sdk.capture_exception(e)
+                    metrics.errors += 1
+            else:
+                logger.info("No records to purge - skipping garbage collection.")
+                
+        except Exception as e:
+            logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+            metrics.errors += 1
+        finally:
+            storage.close()
+        
+        # Capture final crawler metrics
+        total_runtime = time.time() - metrics.start_time
+        capture_crawler_metrics(
+            pages_processed=metrics.total_urls_found, 
+            errors=metrics.errors, 
+            duration=total_runtime
+        )
+        
+        metrics.save_to_file()
+        print("\n" + "="*50)
+        logger.info(f"Crawler run finished in {total_runtime:.2f} seconds.")
+        print("="*50 + "\n")
 
 if __name__ == "__main__":
     main()
