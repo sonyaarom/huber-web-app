@@ -66,12 +66,13 @@ def create_app():
     from ui.app.views.main import handle_message
     socketio.on_event('message', handle_message)
 
+    # Add health check endpoint
+    @app.route("/health")
+    def health():
+        return "ok", 200
+
     logger.info("=== FLASK APP CONFIGURATION COMPLETE ===")
     return app
 
 # Create the app instance
 app = create_app()
-
-@app.route("/health")
-def health():
-    return "ok", 200
