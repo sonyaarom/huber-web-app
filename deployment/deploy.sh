@@ -94,7 +94,7 @@ run_remote "
 echo "📁 Preparing application directory..."
 run_remote "
     sudo mkdir -p '$APP_DIR'
-    sudo chown -R $USER:$USER '$APP_DIR'
+    sudo chown -R ${HETZNER_USER:-root}:${HETZNER_USER:-root} '$APP_DIR'
 "
 
 # Clone or update the repository
