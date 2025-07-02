@@ -37,7 +37,7 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
-      var socket = io.connect('http://' + document.domain + ':' + location.port);
+      var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
       var form = document.getElementById('chat-form');
       var input = document.getElementById('message');
       var messages = document.getElementById('messages');

@@ -1049,8 +1049,8 @@
         return text;
       }
 
-      // Connect to Socket.IO
-      var socket = io.connect('http://' + document.domain + ':' + location.port);
+      // Connect to Socket.IO - auto-detect protocol (HTTP/HTTPS)
+      var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
       var form = document.getElementById('chat-form');
       var input = document.getElementById('message');
       var messages = document.getElementById('messages');
@@ -1356,49 +1356,69 @@
       const howToUse = document.querySelector('.how-to-use');
       const closeBtn = document.querySelector('.close-btn');
       
-      howToUseBtn.addEventListener('click', () => {
-        howToUse.style.display = 'block';
-      });
+      if (howToUseBtn && howToUse) {
+        howToUseBtn.addEventListener('click', () => {
+          howToUse.style.display = 'block';
+        });
+      }
       
-      closeBtn.addEventListener('click', () => {
-        howToUse.style.display = 'none';
-      });
+      if (closeBtn && howToUse) {
+        closeBtn.addEventListener('click', () => {
+          howToUse.style.display = 'none';
+        });
+      }
       
       const newChatBtn = document.getElementById('new-chat');
-      newChatBtn.addEventListener('click', () => {
-        messages.innerHTML = '';
-        input.value = '';
-      });
+      if (newChatBtn) {
+        newChatBtn.addEventListener('click', () => {
+          messages.innerHTML = '';
+          input.value = '';
+        });
+      }
       
       const urlIcon = document.getElementById('url-icon');
-      urlIcon.addEventListener('click', () => {
-        window.location.href = '/search';
-      });
+      if (urlIcon) {
+        urlIcon.addEventListener('click', () => {
+          window.location.href = '/search';
+        });
+      }
       
-      settingsIcon.addEventListener('click', () => {
-        settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
-      });
+      if (settingsIcon) {
+        settingsIcon.addEventListener('click', () => {
+          if (settingsPanel) {
+            settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+          }
+        });
+      }
       
-      darkModeToggle.addEventListener('change', () => {
-        document.body.classList.toggle('dark-mode');
-        localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-      });
+      if (darkModeToggle) {
+        darkModeToggle.addEventListener('change', () => {
+          document.body.classList.toggle('dark-mode');
+          localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+        });
+      }
       
       document.addEventListener('click', function(event) {
-        if (!settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
+        if (settingsPanel && settingsIcon && !settingsPanel.contains(event.target) && !settingsIcon.contains(event.target)) {
           settingsPanel.style.display = 'none';
         }
       });
       
-      settingsCloseBtn.addEventListener('click', () => {
-        settingsPanel.style.display = 'none';
-      });
+      if (settingsCloseBtn) {
+        settingsCloseBtn.addEventListener('click', () => {
+          if (settingsPanel) {
+            settingsPanel.style.display = 'none';
+          }
+        });
+      }
       
-      fontSizeSelect.addEventListener('change', (event) => {
-        document.body.style.fontSize = event.target.value === 'small' ? '12px' :
-                                        event.target.value === 'medium' ? '16px' : '20px';
-        localStorage.setItem('fontSize', event.target.value);
-      });
+      if (fontSizeSelect) {
+        fontSizeSelect.addEventListener('change', (event) => {
+          document.body.style.fontSize = event.target.value === 'small' ? '12px' :
+                                          event.target.value === 'medium' ? '16px' : '20px';
+          localStorage.setItem('fontSize', event.target.value);
+        });
+      }
       
       $('#login-form').submit(function(e) {
         e.preventDefault();
@@ -1407,9 +1427,11 @@
       });
       
       const homeIcon = document.getElementById('home-icon');
-      homeIcon.addEventListener('click', () => {
-        window.location.href = '/';
-      });
+      if (homeIcon) {
+        homeIcon.addEventListener('click', () => {
+          window.location.href = '/';
+        });
+      }
 
       // Function to generate HTML for sources with individual feedback buttons
       function generateSourcesHTML(sources, queryAnalyticsId) {

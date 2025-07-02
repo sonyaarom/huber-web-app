@@ -53,7 +53,10 @@ def create_app():
 
     # Initialize extensions
     login_manager.init_app(app)
-    socketio.init_app(app, cors_allowed_origins="*")
+    socketio.init_app(app, cors_allowed_origins="*", 
+                     async_mode='threading',
+                     logger=True, 
+                     engineio_logger=True)
 
     # Register blueprints
     app.register_blueprint(main_blueprint)
