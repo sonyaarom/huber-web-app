@@ -380,9 +380,11 @@ class PostgresStorage(BaseStorage):
         try:
             conn = self.pool.getconn()
             with conn.cursor() as cursor:
-                cursor.execute("INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s)", 
-                             (user.username, user.password_hash, user.is_admin))
+                cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s) RETURNING id", 
+                             (user.username, user.password_hash, user.role))
+                user_id = cursor.fetchone()[0]
             conn.commit()
+            return user_id
         finally:
             if conn:
                 self.pool.putconn(conn)
