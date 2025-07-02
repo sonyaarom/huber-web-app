@@ -161,7 +161,7 @@ jobs:
         attempt=1
         
         while [ $attempt -le $max_attempts ]; do
-          if curl -f -s "http://${{ secrets.HETZNER_HOST }}/health" >/dev/null; then
+          if curl -f -s "http://${{ secrets.HETZNER_HOST }}:1234/health" >/dev/null; then
             echo "Health check passed (attempt $attempt)"
             break
           else
@@ -189,7 +189,7 @@ jobs:
         
         if [[ "${{ job.status }}" == "success" ]]; then
           echo "**Status:** Deployment Successful" >> $GITHUB_STEP_SUMMARY
-          echo "**Application URL:** http://${{ secrets.HETZNER_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Application URL:** http://${{ secrets.HETZNER_HOST }}:1234" >> $GITHUB_STEP_SUMMARY
         else
           echo "**Status:** Deployment Failed" >> $GITHUB_STEP_SUMMARY
         fi
