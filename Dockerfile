@@ -31,4 +31,4 @@ ENV PORT=1234
 EXPOSE 1234
 
 # Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:1234", "-w", "4", "-k", "gevent", "ui.app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:1234", "-w", "4", "ui.app:app"]
