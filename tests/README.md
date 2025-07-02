@@ -2,7 +2,7 @@
 
 This directory contains comprehensive tests for the sitemap parsing functionality in HUBer. The tests verify that sitemap changes are correctly detected and processed.
 
-## 📋 Test Coverage
+## Test Coverage
 
 ### Unit Tests (`test_sitemap_parsing.py`)
 - **XML Parsing**: Validates standard XML sitemap parsing
@@ -19,7 +19,7 @@ This directory contains comprehensive tests for the sitemap parsing functionalit
 - **Format Support**: Validates gzipped and various sitemap formats
 - **Filtering**: Tests real-world filtering scenarios
 
-## 🚀 Running the Tests
+## Running the Tests
 
 ### Quick Start
 ```bash
@@ -48,7 +48,7 @@ python run_sitemap_tests.py --type integration
 pytest tests/ --cov=hubert.data_ingestion.huber_crawler --cov-report=html
 ```
 
-## 🧪 Test Scenarios
+## Test Scenarios
 
 ### Scenario 1: New Pages Added
 ```python
@@ -103,7 +103,7 @@ def test_mixed_changes_in_sitemap():
     """
 ```
 
-## 📊 Sample Test Data
+## Sample Test Data
 
 The tests use realistic sitemap data modeled after your actual website:
 
@@ -121,7 +121,7 @@ The tests use realistic sitemap data modeled after your actual website:
 </urlset>
 ```
 
-## 🔧 Mock Components
+## Mock Components
 
 ### PostgresStorage Mock
 The tests use a comprehensive mock of the `PostgresStorage` class:
@@ -136,7 +136,7 @@ Tests can mock HTTP requests to simulate:
 - Gzipped responses
 - Various HTTP status codes
 
-## 🎯 Test Assertions
+## Test Assertions
 
 ### Database Operations
 ```python
@@ -168,7 +168,7 @@ assert metrics.errors == 0
 assert metrics.database_update_time > 0
 ```
 
-## 🐛 Common Issues
+## Common Issues
 
 ### Import Errors
 If you see import errors, ensure the project root is in your Python path:
@@ -186,7 +186,7 @@ pip install -r requirements-test.txt
 ### Environment Variables
 Some tests may require database connection details in your `.venv` file.
 
-## 📈 Continuous Integration
+## Continuous Integration
 
 To run these tests in CI/CD:
 
@@ -198,7 +198,7 @@ To run these tests in CI/CD:
     pytest tests/ --cov=hubert.data_ingestion.huber_crawler --cov-report=xml
 ```
 
-## 🔍 Debugging Tests
+## Debugging Tests
 
 ### Verbose Output
 ```bash
@@ -215,7 +215,7 @@ pytest tests/test_sitemap_changes_scenario.py::TestSitemapChangesScenarios::test
 pytest tests/ --pdb  # Drop into debugger on failure
 ```
 
-## 📝 Adding New Tests
+## Adding New Tests
 
 When adding new test scenarios:
 
@@ -239,12 +239,12 @@ def test_your_new_scenario(self):
     # Test implementation
 ```
 
-## 🎉 Success Criteria
+## Success Criteria
 
 Tests pass when:
-- ✅ All URL changes are correctly detected
-- ✅ Database operations are called with correct parameters
-- ✅ Filtering works as expected
-- ✅ Error conditions are handled gracefully
-- ✅ Metrics accurately reflect processing results
-- ✅ No unexpected exceptions are raised 
+- All URL changes are correctly detected
+- Database operations are called with correct parameters
+- Filtering works as expected
+- Error conditions are handled gracefully
+- Metrics accurately reflect processing results
+- No unexpected exceptions are raised 

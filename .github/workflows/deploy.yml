@@ -50,12 +50,12 @@ jobs:
         
         # Validate SSH key format
         if ! ssh-keygen -l -f /tmp/ssh_key >/dev/null 2>&1; then
-          echo "❌ Error: Invalid SSH key format in HETZNER_SSH_KEY secret"
+          echo "Error: Invalid SSH key format in HETZNER_SSH_KEY secret"
           echo "Please ensure the SSH key is properly formatted with correct BEGIN/END markers"
           exit 1
         fi
         
-        echo "✅ SSH key format validated successfully"
+        echo "SSH key format validated successfully"
         
         # Make deployment script executable
         chmod +x deployment/deploy.sh
@@ -122,9 +122,9 @@ jobs:
                -i /tmp/ssh_key \
                ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} \
                "echo 'SSH connection successful'"; then
-          echo "✅ SSH connection test passed"
+          echo "SSH connection test passed"
         else
-          echo "❌ SSH connection failed!"
+          echo "SSH connection failed!"
           echo ""
           echo "Common causes and solutions:"
           echo "1. Check that HETZNER_HOST and HETZNER_USER secrets are correct"

@@ -1,5 +1,0 @@
-"id","session_id","user_id","query","query_tokens","query_length","has_answer","response_time_ms","retrieval_method","num_sources_found","timestamp"
-"124","search-session-1750890641522","6","stefan","[""stefan""]","6","true","0","search","1","2025-06-25 22:30:42.300215+00"
-"123","search-session-1750890640773","6","stefan","[""stefan""]","6","true","0","search","1","2025-06-25 22:30:41.568935+00"
-"122","search-session-1750890639894","6","stefan","[""stefan""]","6","true","0","search","1","2025-06-25 22:30:40.739295+00"
-"121","search-session-1750805941292","6","stefan","[""stefan""]","6","true","15812","search","5","2025-06-25 22:29:33.905181+00"

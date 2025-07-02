@@ -115,7 +115,7 @@ class TestSitemapChanges:
         """Create a mock storage instance for testing."""
         storage = Mock(spec=PostgresStorage)
         storage.upsert_raw_pages = Mock()
-        storage.deactivate_old_urls = Mock()
+        storage.deactivate_old_urls = Mock(return_value=[])  # Return empty list for deactivated UIDs
         storage.close = Mock()
         return storage
     
@@ -188,6 +188,9 @@ class TestSitemapChanges:
         """Test processing sitemap changes through the main pipeline."""
         # Mock sitemap download
         mock_download.return_value = sample_sitemap_v2.encode('utf-8')
+        
+        # Set up proper return value for deactivate_old_urls (should return a list)
+        mock_storage.deactivate_old_urls.return_value = ['deactivated_uid_1', 'deactivated_uid_2']
         
         # Process sitemap
         records = process_sitemap(
@@ -331,7 +334,7 @@ class TestSitemapIntegration:
         # Mock storage for this test
         mock_storage = Mock(spec=PostgresStorage)
         mock_storage.upsert_raw_pages = Mock()
-        mock_storage.deactivate_old_urls = Mock()
+        mock_storage.deactivate_old_urls = Mock(return_value=[])  # Return empty list for deactivated UIDs
         mock_storage.close = Mock()
         
         # Process initial sitemap

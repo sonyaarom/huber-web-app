@@ -1,0 +1,230 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: hubert_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          gcc \
+          build-essential \
+          python3-dev \
+          libpq-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+        # Install additional test dependencies if not in requirements.txt
+        pip install pytest-cov pytest-mock
+
+    - name: Download spaCy model
+      run: |
+        python -m spacy download en_core_web_sm
+
+    - name: Set up test environment
+      run: |
+        # Create test environment file
+        cat > .env.test << EOF
+        # Test Environment Configuration
+        DEPLOYMENT_ENV=test
+        
+        # Test Database Configuration
+        DB_HOST=localhost
+        DB_PORT=5432
+        DB_NAME=hubert_test
+        DB_USERNAME=postgres
+        DB_PASSWORD=postgres
+        
+        # Mock API Keys for testing
+        OPENAI_API_KEY=test-key
+        PINECONE_API_KEY=test-key
+        PINECONE_ENVIRONMENT=test
+        PINECONE_INDEX=test
+        TOGETHER_API_KEY=test-key
+        
+        # Test Configuration
+        SECRET_KEY=test-secret-key
+        ADMIN_PASSWORD=test-password
+        
+        # Model Configuration for testing
+        EMBEDDING_MODEL='text-embedding-3-small'
+        RERANKER_MODEL='cross-encoder/ms-marco-MiniLM-L-6-v2'
+        USE_NER='False'
+        USE_RERANKER='True'
+        HYBRID_ALPHA='0.50'
+        DEFAULT_PROMPT_TYPE=advanced
+        
+        # Performance Settings
+        TOKENIZERS_PARALLELISM=false
+        PYTHONUNBUFFERED=1
+        PYTHONDONTWRITEBYTECODE=1
+        EOF
+
+    - name: Wait for PostgreSQL to be ready
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL to be ready..."
+          sleep 2
+        done
+
+    - name: Set up test database
+      run: |
+        export PGPASSWORD=postgres
+        # Create extensions if needed
+        psql -h localhost -U postgres -d hubert_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+        psql -h localhost -U postgres -d hubert_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+        
+    - name: Run Unit Tests
+      run: |
+        # Set environment variables
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+        
+        # Run all test files explicitly with coverage
+        python -m pytest \
+          tests/test_postgres_storage.py \
+          tests/test_hybrid_retriever.py \
+          tests/test_sitemap_parsing.py \
+          tests/test_sitemap_changes_scenario.py \
+          tests/test_app.py \
+          -v \
+          --cov=hubert \
+          --cov-report=xml \
+          --cov-report=term-missing \
+          --tb=short \
+          --maxfail=10
+      env:
+        DEPLOYMENT_ENV: test
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: hubert_test
+        DB_USERNAME: postgres
+        DB_PASSWORD: postgres
+
+    - name: Upload Coverage Reports
+      if: always()
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Test Import Structure
+      run: |
+        # Test that main modules can be imported
+        python -c "import hubert"
+        python -c "from hubert.db.postgres_storage import PostgresStorage"
+        python -c "from hubert.retriever.retriever import HybridRetriever"
+        echo "All main modules import successfully"
+
+    - name: Validate Configuration
+      run: |
+        # Test configuration loading
+        python -c "
+        from hubert.config import Config
+        config = Config()
+        print('Configuration loads successfully')
+        print(f'Environment: {config.DEPLOYMENT_ENV}')
+        "
+
+    - name: Test Summary
+      if: always()
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Python Version:** 3.11" >> $GITHUB_STEP_SUMMARY
+        echo "**Test Environment:** test" >> $GITHUB_STEP_SUMMARY
+        echo "**Git Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Git Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "**Status:** All Tests Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Status:** Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy
+
+    - name: Run Black (Code Formatting Check)
+      run: |
+        black --check --diff hubert/ tests/ || {
+          echo "Code formatting issues found. Run 'black hubert/ tests/' to fix."
+          exit 1
+        }
+
+    - name: Run isort (Import Sorting Check)
+      run: |
+        isort --check-only --diff hubert/ tests/ || {
+          echo "Import sorting issues found. Run 'isort hubert/ tests/' to fix."
+          exit 1
+        }
+
+    - name: Run Flake8 (Linting)
+      run: |
+        flake8 hubert/ tests/ --max-line-length=100 --extend-ignore=E203,W503
+
+    - name: Lint Summary
+      if: always()
+      run: |
+        echo "## Code Quality Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "**Status:** All code quality checks passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Status:** Code quality issues found" >> $GITHUB_STEP_SUMMARY
+        fi 
