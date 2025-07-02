@@ -136,7 +136,7 @@ run_remote "
     
     # Build the application
     echo 'Building Docker image...'
-    docker-compose build --no-cache || docker compose build --no-cache
+    docker-compose build || docker compose build
     
     # Start the application
     echo 'Starting the application...'
