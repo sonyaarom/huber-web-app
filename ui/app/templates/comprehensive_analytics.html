@@ -1,48 +1,6 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">📊 Comprehensive Analytics Dashboard</h1>
-    </div>
-
-    <!-- Time Period Tabs -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <ul class="nav nav-tabs" id="timeframeTabs" role="tablist">
-
-                <li class="nav-item">
-                    <a class="nav-link active" id="7d-tab" data-toggle="tab" href="#7d-content" role="tab">
-                        📅 Last 7 Days
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="30d-tab" data-toggle="tab" href="#30d-content" role="tab">
-                        📅 Last 30 Days
-                    </a>
-
-                </li>
-            </ul>
-
-            <div class="tab-content mt-3" id="timeframeContent">
-                <!-- 7 Days Tab -->
-                <div class="tab-pane fade show active" id="7d-content" role="tabpanel">
-                    {% set metrics = metrics_7d %}
-                    {% set timeframe = '7d' %}
-                    {% include 'analytics_content.html' %}
-                </div>
-
-                <!-- 30 Days Tab -->
-                <div class="tab-pane fade" id="30d-content" role="tabpanel">
-                    {% set metrics = metrics_30d %}
-                    {% set timeframe = '30d' %}
-                    {% include 'analytics_content.html' %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
+{% block style %}
 <style>
 .metrics-card {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -101,12 +59,63 @@
 .precision-medium { background-color: #fff3cd; color: #856404; }
 .precision-low { background-color: #f8d7da; color: #721c24; }
 
+.main {
+    height: 100vh;
+    overflow-y: auto;
+}
+
 @media print {
     .no-print { display: none !important; }
     .card { border: 1px solid #ddd !important; box-shadow: none !important; }
 }
 </style>
+{% endblock %}
 
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">📊 Comprehensive Analytics Dashboard</h1>
+    </div>
+
+    <!-- Time Period Tabs -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <ul class="nav nav-tabs" id="timeframeTabs" role="tablist">
+
+                <li class="nav-item">
+                    <a class="nav-link active" id="7d-tab" data-toggle="tab" href="#7d-content" role="tab">
+                        📅 Last 7 Days
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="30d-tab" data-toggle="tab" href="#30d-content" role="tab">
+                        📅 Last 30 Days
+                    </a>
+
+                </li>
+            </ul>
+
+            <div class="tab-content mt-3" id="timeframeContent">
+                <!-- 7 Days Tab -->
+                <div class="tab-pane fade show active" id="7d-content" role="tabpanel">
+                    {% set metrics = metrics_7d %}
+                    {% set timeframe = '7d' %}
+                    {% include 'analytics_content.html' %}
+                </div>
+
+                <!-- 30 Days Tab -->
+                <div class="tab-pane fade" id="30d-content" role="tabpanel">
+                    {% set metrics = metrics_30d %}
+                    {% set timeframe = '30d' %}
+                    {% include 'analytics_content.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Global chart instances

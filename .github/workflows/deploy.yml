@@ -45,7 +45,7 @@ jobs:
         EOF
         
         # Setup SSH key with proper format handling
-        echo "${{ secrets.HETZNER_SSH_KEY }}" | tr -d '\r' > /tmp/ssh_key
+        echo "${{ secrets.HETZNER_SSH_KEY }}" > /tmp/ssh_key
         chmod 600 /tmp/ssh_key
         
         # Validate SSH key format
@@ -119,7 +119,6 @@ jobs:
         if ssh -o ConnectTimeout=30 \
                -o StrictHostKeyChecking=no \
                -o UserKnownHostsFile=/dev/null \
-               -o BatchMode=yes \
                -i /tmp/ssh_key \
                ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} \
                "echo 'SSH connection successful'"; then
