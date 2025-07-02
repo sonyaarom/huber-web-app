@@ -128,7 +128,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeCharts(timeframe) {
-    const metrics = timeframe === '7d' ? {{ metrics_7d|tojson }} : {{ metrics_30d|tojson }};
+    const metricsData = {
+        '7d': {{ metrics_7d|tojson|safe }},
+        '30d': {{ metrics_30d|tojson|safe }}
+    };
+    const metrics = metricsData[timeframe];
     
     // Destroy existing charts
     Object.values(charts).forEach(chart => {

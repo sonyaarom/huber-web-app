@@ -44,9 +44,18 @@ jobs:
         DEPLOYMENT_ENV=production
         EOF
         
-        # Setup SSH key
-        echo "${{ secrets.HETZNER_SSH_KEY }}" > /tmp/ssh_key
+        # Setup SSH key with proper format handling
+        echo "${{ secrets.HETZNER_SSH_KEY }}" | tr -d '\r' > /tmp/ssh_key
         chmod 600 /tmp/ssh_key
+        
+        # Validate SSH key format
+        if ! ssh-keygen -l -f /tmp/ssh_key >/dev/null 2>&1; then
+          echo "❌ Error: Invalid SSH key format in HETZNER_SSH_KEY secret"
+          echo "Please ensure the SSH key is properly formatted with correct BEGIN/END markers"
+          exit 1
+        fi
+        
+        echo "✅ SSH key format validated successfully"
         
         # Make deployment script executable
         chmod +x deployment/deploy.sh
@@ -105,8 +114,27 @@ jobs:
     - name: Test SSH Connection
       run: |
         # Test SSH connection to server
-        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i /tmp/ssh_key \
-          ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "echo 'SSH connection successful'"
+        echo "🔌 Testing SSH connection to ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}..."
+        
+        if ssh -o ConnectTimeout=30 \
+               -o StrictHostKeyChecking=no \
+               -o UserKnownHostsFile=/dev/null \
+               -o BatchMode=yes \
+               -i /tmp/ssh_key \
+               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} \
+               "echo 'SSH connection successful'"; then
+          echo "✅ SSH connection test passed"
+        else
+          echo "❌ SSH connection failed!"
+          echo ""
+          echo "Common causes and solutions:"
+          echo "1. Check that HETZNER_HOST and HETZNER_USER secrets are correct"
+          echo "2. Verify the SSH key is properly formatted (see setup-github-secrets.sh)"
+          echo "3. Ensure the public key is added to ~/.ssh/authorized_keys on the server"
+          echo "4. Check server firewall allows SSH connections (port 22)"
+          echo "5. Verify the server is running and accessible"
+          exit 1
+        fi
     
     - name: Deploy to Hetzner Server
       run: |
