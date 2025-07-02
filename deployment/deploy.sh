@@ -95,13 +95,6 @@ echo "📁 Preparing application directory..."
 run_remote "
     sudo mkdir -p '$APP_DIR'
     sudo chown -R $USER:$USER '$APP_DIR'
-    cd '$APP_DIR'
-    
-    # Stop existing containers if running
-    if [[ -f docker-compose.yml ]]; then
-        echo 'Stopping existing containers...'
-        docker-compose down --remove-orphans || docker compose down --remove-orphans || true
-    fi
 "
 
 # Clone or update the repository
@@ -117,6 +110,12 @@ run_remote "
     else
         echo 'Cloning repository...'
         git clone '$REPO_URL' .
+    fi
+    
+    # Stop and remove old containers before building new ones
+    if [[ -f docker-compose.yml ]]; then
+        echo 'Ensuring all old containers are down before build...'
+        docker-compose down --remove-orphans || docker compose down --remove-orphans || true
     fi
     
     echo 'Current commit:'
