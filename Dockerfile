@@ -31,4 +31,4 @@ ENV PORT=1234
 EXPOSE 1234
 
 # Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:1234", "-w", "1", "--worker-class", "eventlet", "--timeout", "120", "--keepalive", "5", "--access-logfile", "-", "--error-logfile", "-", "run_ui:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:1234", "-w", "1", "--worker-class", "eventlet", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "run_ui:app"]
