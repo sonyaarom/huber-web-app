@@ -43,7 +43,7 @@ run_remote() {
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -i "$HETZNER_SSH_KEY" \
-        "$HETZNER_USER@$HETZNER_HOST" "$@"
+        "$HETZNER_USER@$HETZNER_HOST" "set -e; $@"
 }
 
 # Function to copy files to remote server
