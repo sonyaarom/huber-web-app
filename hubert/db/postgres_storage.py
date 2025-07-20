@@ -105,24 +105,100 @@ class PostgresStorage(BaseStorage):
             query += f" LIMIT {limit}"
         return self._execute_query(query, fetch='all')
 
-    def upsert_raw_pages(self, records: List[Dict[str, Any]]):
-        """Move the logic from hubert.data_ingestion.huber_crawler.main.py here."""
-        query = """
-            INSERT INTO page_raw (id, url, last_updated)
-            VALUES %s
-            ON CONFLICT (id) DO UPDATE SET
-                url = EXCLUDED.url,
-                last_updated = EXCLUDED.last_updated,
-                is_active = TRUE;
-        """
-        values = [(r['id'], r['url'], r['last_updated']) for r in records]
+    def upsert_raw_pages(self, records: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Insert or update raw page metadata (URL, last_modified).
         
+        Returns:
+            Dict with counts of new_records, updated_records, unchanged_records
+        """
+        if not records:
+            return {"new_records": 0, "updated_records": 0, "unchanged_records": 0}
+            
+        # Create a temporary table to hold our new data
+        temp_table_query = """
+        CREATE TEMP TABLE temp_page_raw (
+            id TEXT,
+            url TEXT,
+            last_updated TIMESTAMPTZ,
+            is_active BOOLEAN DEFAULT TRUE
+        ) ON COMMIT DROP;
+        """
+        
+        # Insert data into temp table
+        insert_temp_query = """
+        INSERT INTO temp_page_raw (id, url, last_updated, is_active)
+        VALUES %s;
+        """
+        
+        # Analysis query to determine new vs updated vs unchanged
+        analysis_query = """
+        WITH record_analysis AS (
+            SELECT 
+                t.id,
+                t.url,
+                t.last_updated,
+                t.is_active,
+                CASE 
+                    WHEN p.id IS NULL THEN 'new'
+                    WHEN p.url != t.url OR p.last_updated != t.last_updated OR p.is_active != t.is_active THEN 'updated'
+                    ELSE 'unchanged'
+                END as record_status
+            FROM temp_page_raw t
+            LEFT JOIN page_raw p ON t.id = p.id
+        )
+        SELECT 
+            record_status,
+            COUNT(*) as count
+        FROM record_analysis
+        GROUP BY record_status;
+        """
+        
+        # Actual upsert query
+        upsert_query = """
+        INSERT INTO page_raw (id, url, last_updated, is_active, last_scraped) 
+        SELECT id, url, last_updated, is_active, NOW()
+        FROM temp_page_raw
+        ON CONFLICT (id) DO UPDATE SET
+            url = EXCLUDED.url,
+            last_updated = EXCLUDED.last_updated,
+            is_active = EXCLUDED.is_active,
+            last_scraped = EXCLUDED.last_scraped;
+        """
+
+        values = [(r['uid'], r['url'], r['last_updated'], r.get('is_active', True)) for r in records]
+
         conn = None
         try:
             conn = self.pool.getconn()
             with conn.cursor() as cursor:
-                execute_values(cursor, query, values)
+                # Create temp table
+                cursor.execute(temp_table_query)
+                
+                # Insert into temp table
+                execute_values(cursor, insert_temp_query, values, page_size=100)
+                
+                # Analyze changes
+                cursor.execute(analysis_query)
+                analysis_results = cursor.fetchall()
+                
+                # Perform the actual upsert
+                cursor.execute(upsert_query)
+                
             conn.commit()
+            
+            # Process analysis results
+            stats = {"new_records": 0, "updated_records": 0, "unchanged_records": 0}
+            for row in analysis_results:
+                status, count = row
+                if status == 'new':
+                    stats["new_records"] = count
+                elif status == 'updated':
+                    stats["updated_records"] = count
+                elif status == 'unchanged':
+                    stats["unchanged_records"] = count
+                    
+            return stats
+            
         finally:
             if conn:
                 self.pool.putconn(conn)
@@ -399,29 +475,6 @@ class PostgresStorage(BaseStorage):
         """
         result = self._execute_query(query, fetch='all')
         return [row[0] for row in result] if result else []
-
-    def upsert_raw_pages(self, records: List[Dict[str, Any]]):
-        """Insert or update raw page metadata (URL, last_modified)."""
-        upsert_query = """
-            INSERT INTO page_raw (id, url, last_updated, is_active) 
-            VALUES %s
-            ON CONFLICT (id) DO UPDATE SET
-                url = EXCLUDED.url,
-                last_updated = EXCLUDED.last_updated,
-                is_active = EXCLUDED.is_active,
-                last_scraped = EXCLUDED.last_scraped;
-        """
-        values = [(r['id'], r['url'], r['last_updated'], r.get('is_active', True)) for r in records]
-
-        conn = None
-        try:
-            conn = self.pool.getconn()
-            with conn.cursor() as cursor:
-                execute_values(cursor, upsert_query, values, page_size=100)
-            conn.commit()
-        finally:
-            if conn:
-                self.pool.putconn(conn)
 
     def deactivate_old_urls(self, current_ids: List[str]) -> List[str]:
         """Mark URLs no longer present in the sitemap as inactive."""

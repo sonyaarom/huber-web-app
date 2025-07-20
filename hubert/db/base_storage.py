@@ -25,8 +25,12 @@ class BaseStorage(ABC):
         pass
 
     @abstractmethod
-    def upsert_raw_pages(self, records: List[Dict[str, Any]]):
-        """Insert or update raw page metadata (URL, last_modified)."""
+    def upsert_raw_pages(self, records: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Insert or update raw page metadata (URL, last_modified).
+        
+        Returns:
+            Dict with counts of new_records, updated_records, unchanged_records
+        """
         pass
 
     @abstractmethod

@@ -89,12 +89,15 @@ def process_page_raw_records(storage: PostgresStorage, records: Dict, metrics: C
             'last_updated': record_data['last_updated'],
         })
 
-    # 2. Perform the bulk upsert using the storage layer
+    # 2. Perform the bulk upsert using the storage layer and get statistics
     try:
-        storage.upsert_raw_pages(records_to_upsert)
-        # Note: We can't easily get the number of new vs. updated from the storage layer
-        # without a more complex return value. This is a simplification.
+        upsert_stats = storage.upsert_raw_pages(records_to_upsert)
+        metrics.new_urls = upsert_stats.get('new_records', 0)
+        metrics.updated_urls = upsert_stats.get('updated_records', 0) 
+        metrics.unchanged_urls = upsert_stats.get('unchanged_records', 0)
+        
         logger.info(f"Successfully bulk upserted {len(records_to_upsert)} records into page_raw.")
+        logger.info(f"Statistics: {metrics.new_urls} new, {metrics.updated_urls} updated, {metrics.unchanged_urls} unchanged")
     except Exception as e:
         logger.error(f"Error during bulk upsert of raw pages: {e}")
         metrics.errors += len(records_to_upsert)
@@ -132,76 +135,91 @@ def main():
     
     with sentry_sdk.start_transaction(name="crawler_main", op="crawler"):
         metrics = CrawlerMetrics()
-        logger.info("🚀 Starting sitemap processing...")
         
-        sitemap_start_time = time.time()
-        records = {}
         try:
-            with sentry_sdk.start_span(op="sitemap", description="Process sitemap"):
-                records = process_sitemap(
-                    settings.url,
-                    settings.pattern,
-                    settings.exclude_extensions,
-                    settings.exclude_patterns,
-                    settings.include_patterns,
-                    settings.allowed_base_url
-                )
-            metrics.sitemap_processing_time = time.time() - sitemap_start_time
-            logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
+            logger.info("Starting sitemap processing...")
             
-            # Capture sitemap processing metrics
-            sentry_sdk.set_measurement("sitemap_processing_time", metrics.sitemap_processing_time, "second")
-            sentry_sdk.set_measurement("sitemap_records_found", len(records))
-            
-        except Exception as e:
-            logger.error(f"Fatal error processing sitemap: {e}", exc_info=True)
-            sentry_sdk.capture_exception(e)
-            metrics.errors += 1
-            metrics.save_to_file()
-            sys.exit(1)
-
-        storage = PostgresStorage()
-        try:
-            with sentry_sdk.start_span(op="database", description="Process page records"):
-                deactivated_uids = process_page_raw_records(storage, records, metrics)
-            
-            # Immediately purge the deactivated records from all related tables
-            if deactivated_uids:
-                logger.info(f"Starting immediate garbage collection for {len(deactivated_uids)} deactivated UIDs...")
-                purge_start_time = time.time()
-                try:
-                    with sentry_sdk.start_span(op="database", description="Garbage collection"):
-                        total_deleted = storage.purge_specific_inactive_records(deactivated_uids)
-                    purge_time = time.time() - purge_start_time
-                    logger.info(f"Garbage collection completed in {purge_time:.2f} sec. Total records deleted: {total_deleted}")
-                    sentry_sdk.set_measurement("purge_time", purge_time, "second")
-                    sentry_sdk.set_measurement("records_purged", total_deleted)
-                except Exception as e:
-                    logger.error(f"Error during immediate garbage collection: {e}", exc_info=True)
-                    sentry_sdk.capture_exception(e)
-                    metrics.errors += 1
-            else:
-                logger.info("No records to purge - skipping garbage collection.")
+            sitemap_start_time = time.time()
+            records = {}
+            try:
+                with sentry_sdk.start_span(op="sitemap", description="Process sitemap"):
+                    records = process_sitemap(
+                        settings.url,
+                        settings.pattern,
+                        settings.exclude_extensions,
+                        settings.exclude_patterns,
+                        settings.include_patterns,
+                        settings.allowed_base_url
+                    )
+                metrics.sitemap_processing_time = time.time() - sitemap_start_time
+                logger.info(f"Sitemap processed in {metrics.sitemap_processing_time:.2f} sec, {len(records)} records found.")
                 
+                # Capture sitemap processing metrics
+                sentry_sdk.set_measurement("sitemap_processing_time", metrics.sitemap_processing_time, "second")
+                sentry_sdk.set_measurement("sitemap_records_found", len(records))
+                
+            except Exception as e:
+                logger.error(f"Fatal error processing sitemap: {e}", exc_info=True)
+                sentry_sdk.capture_exception(e)
+                metrics.errors += 1
+                metrics.save_to_file()
+                sys.exit(1)
+
+            storage = PostgresStorage()
+            try:
+                with sentry_sdk.start_span(op="database", description="Process page records"):
+                    deactivated_uids = process_page_raw_records(storage, records, metrics)
+                
+                # Immediately purge the deactivated records from all related tables
+                if deactivated_uids:
+                    logger.info(f"Starting immediate garbage collection for {len(deactivated_uids)} deactivated UIDs...")
+                    purge_start_time = time.time()
+                    try:
+                        with sentry_sdk.start_span(op="database", description="Garbage collection"):
+                            total_deleted = storage.purge_specific_inactive_records(deactivated_uids)
+                        purge_time = time.time() - purge_start_time
+                        logger.info(f"Garbage collection completed in {purge_time:.2f} sec. Total records deleted: {total_deleted}")
+                        sentry_sdk.set_measurement("purge_time", purge_time, "second")
+                        sentry_sdk.set_measurement("records_purged", total_deleted)
+                    except Exception as e:
+                        logger.error(f"Error during immediate garbage collection: {e}", exc_info=True)
+                        sentry_sdk.capture_exception(e)
+                        metrics.errors += 1
+                else:
+                    logger.info("No records to purge - skipping garbage collection.")
+                    
+            except Exception as e:
+                logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
+                sentry_sdk.capture_exception(e)
+                metrics.errors += 1
+            finally:
+                storage.close()
+            
+            # Capture final crawler metrics
+            total_runtime = time.time() - metrics.start_time
+            capture_crawler_metrics(
+                pages_processed=metrics.total_urls_found, 
+                errors=metrics.errors, 
+                duration=total_runtime
+            )
+            
+            logger.info(f"Crawler run finished in {total_runtime:.2f} seconds.")
+            print("\n" + "="*50)
+            logger.info(f" Summary: Found {metrics.total_urls_found} URLs, {metrics.new_urls} new, {metrics.removed_urls} removed, {metrics.errors} errors")
+            print("="*50 + "\n")
+            
         except Exception as e:
-            logger.error(f"A database error occurred during the main process: {e}", exc_info=True)
+            logger.error(f"Unexpected error in crawler main: {e}", exc_info=True)
             sentry_sdk.capture_exception(e)
             metrics.errors += 1
         finally:
-            storage.close()
-        
-        # Capture final crawler metrics
-        total_runtime = time.time() - metrics.start_time
-        capture_crawler_metrics(
-            pages_processed=metrics.total_urls_found, 
-            errors=metrics.errors, 
-            duration=total_runtime
-        )
-        
-        metrics.save_to_file()
-        print("\n" + "="*50)
-        logger.info(f"Crawler run finished in {total_runtime:.2f} seconds.")
-        print("="*50 + "\n")
+            # Always save metrics, even if there were errors
+            try:
+                metrics.save_to_file()
+                logger.info("Metrics saved successfully")
+            except Exception as e:
+                logger.error(f"Failed to save metrics: {e}", exc_info=True)
+                print(f"ERROR: Failed to save metrics: {e}")
 
 if __name__ == "__main__":
     main()
