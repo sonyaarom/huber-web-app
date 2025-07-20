@@ -4,6 +4,7 @@ Utility functions for crawling operations.
 
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional, Callable, Any
 from functools import wraps
@@ -48,12 +49,13 @@ def convert_to_date(date_string: Optional[str]) -> Optional[datetime]:
         return None
     
     try:
+        # Clean up date strings with double timezone info
+        date_string = re.sub(r'([+-]\d{2}:\d{2})\+00:00$', r'\1', date_string)
+
         # Handle various ISO date formats
         # Remove timezone info if present and add UTC
         if date_string.endswith('Z'):
             date_string = date_string[:-1] + '+00:00'
-        elif '+' not in date_string and 'T' in date_string:
-            date_string = date_string + '+00:00'
         
         # Parse the date
         dt = datetime.fromisoformat(date_string)
@@ -136,4 +138,4 @@ def is_valid_url(url: str) -> bool:
         if url.lower().startswith(protocol):
             return False
     
-    return True 
+    return True
