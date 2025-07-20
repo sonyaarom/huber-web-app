@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # API Keys
     # --------------------------------------------------------------------------
     openai_api_key: str = Field(env='OPENAI_API_KEY')
-    together_api_key: str = Field(env='TOGETHER_API_KEY')
+    together_api_key: Optional[str] = Field(env='TOGETHER_API_KEY', default=None)
     langfuse_secret_key: Optional[str] = Field(env='LANGFUSE_SECRET_KEY', default=None)
     langfuse_public_key: Optional[str] = Field(env='LANGFUSE_PUBLIC_KEY', default=None)
     pinecone_api_key: Optional[str] = Field(env='PINECONE_API_KEY', default=None)
