@@ -277,7 +277,7 @@ class PostgresStorage(BaseStorage):
 
     def upsert_embeddings(self, table_name: str, embedding_records: List[Dict[str, Any]]):
         """Move logic from hubert.data_ingestion.processors.embedding_processor.py"""
-        if table_name == 'page_embeddings_alpha':
+        if table_name == 'page_embeddings_a':
             query = f"INSERT INTO {table_name} (id, split_id, url, chunk_text, embedding, last_scraped) VALUES %s"
             values = [(r['id'], r['split_id'], r['url'], r['chunk_text'], r['embedding'], r.get('last_scraped')) for r in embedding_records]
         else:
@@ -402,7 +402,7 @@ class PostgresStorage(BaseStorage):
 
             # Delete from all related tables
             tables_to_purge = [
-                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+                'page_embeddings_a', 'page_keywords', 'page_content', 'page_raw'
             ]
             for table in tables_to_purge:
                 # Use a placeholder for the list of UIDs
@@ -424,7 +424,7 @@ class PostgresStorage(BaseStorage):
         total_deleted = 0
         with self.pool.getconn() as conn, conn.cursor() as cursor:
             tables_to_purge = [
-                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+                'page_embeddings_a', 'page_keywords', 'page_content', 'page_raw'
             ]
             for table in tables_to_purge:
                 delete_query = f"DELETE FROM {table} WHERE id = ANY(%s) RETURNING *"
@@ -542,7 +542,7 @@ class PostgresStorage(BaseStorage):
 
             # Delete from all related tables
             tables_to_purge = [
-                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+                'page_embeddings_a', 'page_keywords', 'page_content', 'page_raw'
             ]
             for table in tables_to_purge:
                 # Use a placeholder for the list of UIDs
@@ -564,7 +564,7 @@ class PostgresStorage(BaseStorage):
         total_deleted = 0
         with self.pool.getconn() as conn, conn.cursor() as cursor:
             tables_to_purge = [
-                'page_embeddings_alpha', 'page_keywords', 'page_content', 'page_raw'
+                'page_embeddings_a', 'page_keywords', 'page_content', 'page_raw'
             ]
             for table in tables_to_purge:
                 delete_query = f"DELETE FROM {table} WHERE id = ANY(%s) RETURNING *"
