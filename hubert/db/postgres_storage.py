@@ -412,9 +412,12 @@ class PostgresStorage(BaseStorage):
             conn.commit()
 
     def log_failed_job(self, uid: str, job_type: str, error: str = ""):
-        """Log a failed job attempt."""
-        query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
-        self._execute_query(query, (uid, job_type, error), commit=True)
+        """Log a failed job attempt. Swallow errors if the table is missing."""
+        try:
+            query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
+            self._execute_query(query, (uid, job_type, error), commit=True)
+        except Exception as e:
+            logger.warning(f"Could not log failed job for uid {uid}: {e}")
 
     def purge_specific_inactive_records(self, inactive_uids: List[str]) -> int:
         """Delete records for a specific list of inactive UIDs."""
@@ -552,9 +555,12 @@ class PostgresStorage(BaseStorage):
             conn.commit()
 
     def log_failed_job(self, uid: str, job_type: str, error: str = ""):
-        """Log a failed job attempt."""
-        query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
-        self._execute_query(query, (uid, job_type, error), commit=True)
+        """Log a failed job attempt. Swallow errors if the table is missing."""
+        try:
+            query = "INSERT INTO failed_jobs (uid, job_type, error_message) VALUES (%s, %s, %s)"
+            self._execute_query(query, (uid, job_type, error), commit=True)
+        except Exception as e:
+            logger.warning(f"Could not log failed job for uid {uid}: {e}")
 
     def purge_specific_inactive_records(self, inactive_uids: List[str]) -> int:
         """Delete records for a specific list of inactive UIDs."""

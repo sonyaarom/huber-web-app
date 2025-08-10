@@ -100,7 +100,10 @@ if __name__ == "__main__":
                     html_content = get_html_content(url)
                     if not html_content:
                         logger.warning(f"Skipping URL due to fetch failure: {url}")
-                        storage.log_failed_job(uid, 'content_extraction', "HTML content fetch failed")
+                        try:
+                            storage.log_failed_job(uid, 'content_extraction', "HTML content fetch failed")
+                        except Exception as log_err:
+                            logger.warning(f"Failed to log failed job for uid {uid}: {log_err}")
                         continue
                     
                     extracted = extract_info(html_content)
@@ -129,7 +132,10 @@ if __name__ == "__main__":
                     })
                 except Exception as e:
                     logger.error(f"Error processing {url}: {e}")
-                    storage.log_failed_job(uid, 'content_extraction', str(e))
+                    try:
+                        storage.log_failed_job(uid, 'content_extraction', str(e))
+                    except Exception as log_err:
+                        logger.warning(f"Failed to log failed job for uid {uid}: {log_err}")
             
             if processed_data:
                 storage.upsert_page_content(processed_data)
