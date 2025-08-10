@@ -65,6 +65,11 @@ if __name__ == "__main__":
             print("No records require keyword processing. Exiting.")
         else:
             print(f"Found {len(records)} records to process for keywords.")
+            # Debug: Check what we actually got
+            if records:
+                print(f"First record structure: {records[0]}")
+                print(f"Record length: {len(records[0])}")
+            
             # 2. Process the records in memory
             processed_data = []
             from datetime import datetime

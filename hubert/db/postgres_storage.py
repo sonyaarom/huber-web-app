@@ -263,7 +263,15 @@ class PostgresStorage(BaseStorage):
             LEFT JOIN page_keywords pk ON pc.id = pk.id
             WHERE pk.id IS NULL AND pc.extracted_content IS NOT NULL;
         """
-        return self._execute_query(query, fetch='all')
+        result = self._execute_query(query, fetch='all')
+        
+        # Debug logging to see what we're actually getting
+        if result:
+            logger.info(f"Query returned {len(result)} records")
+            logger.info(f"First record structure: {result[0] if result else 'None'}")
+            logger.info(f"Number of columns in first record: {len(result[0]) if result else 0}")
+        
+        return result if result else []
 
     def get_content_to_process_for_embeddings(self, table_name: str) -> List[Tuple[str, str]]:
         """Move logic from scripts/data_check.py or embedding_processor.py"""
