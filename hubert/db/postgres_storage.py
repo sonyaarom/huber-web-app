@@ -259,7 +259,8 @@ class PostgresStorage(BaseStorage):
     def get_content_to_process_for_keywords(self) -> List[Tuple[str, str, str]]:
         """Fetch content that needs keyword processing."""
         query = """
-            SELECT pc.id, pc.url, pc.extracted_content FROM page_content pc
+            SELECT pc.id, COALESCE(pc.url, '') as url, pc.extracted_content 
+            FROM page_content pc
             LEFT JOIN page_keywords pk ON pc.id = pk.id
             WHERE pk.id IS NULL AND pc.extracted_content IS NOT NULL;
         """
