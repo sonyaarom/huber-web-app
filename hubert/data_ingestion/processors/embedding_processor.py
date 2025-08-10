@@ -76,20 +76,20 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
 
     if uids:
         logger.info(f"Processing specific UIDs: {uids}")
-        query = text("SELECT uid, extracted_content FROM page_content WHERE uid = ANY(:uids)")
+        query = text("SELECT id, url, extracted_content FROM page_content WHERE id = ANY(:uids)")
         df = pd.read_sql(query, engine, params={'uids': uids})
     else:
         logger.info("No UIDs provided. Fetching content without embeddings.")
-        # This query assumes that if a uid from page_content is not in the embeddings table, it needs processing.
+        # This query assumes that if an id from page_content is not in the embeddings table, it needs processing.
         # This is a simplified version of the original logic.
         query = text(f"""
-            SELECT pc.uid, pc.extracted_content
+            SELECT pc.id, pc.url, pc.extracted_content
             FROM page_content pc
-            LEFT JOIN {table_name} emb ON pc.uid = emb.uid
-            WHERE emb.uid IS NULL AND pc.extracted_content IS NOT NULL
+            LEFT JOIN {table_name} emb ON pc.id = emb.id
+            WHERE emb.id IS NULL AND pc.extracted_content IS NOT NULL
         """)
         df = pd.read_sql(query, engine)
-        uids_to_process = df['uid'].tolist()
+        uids_to_process = df['id'].tolist()
         if not uids_to_process:
             logger.info(f"No new content to process for embeddings in table {table_name}.")
             return
@@ -100,12 +100,12 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
         logger.warning(f"No content found for the given UIDs.")
         return
 
-    # Compute content hash
-    df['content_hash'] = df['extracted_content'].apply(lambda x: hashlib.md5(x.encode('utf-8')).hexdigest() if pd.notna(x) else None)
-
     chunking_strategy = get_chunking_strategy(chunk_strategy_name, **chunk_options)
     
     all_chunks = []
+    from datetime import datetime
+    now_timestamp = datetime.now()
+    
     for _, row in df.iterrows():
         if not row['extracted_content']:
             continue
@@ -113,14 +113,15 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
             chunks = chunking_strategy.split_text(row['extracted_content'])
             for i, chunk_text in enumerate(chunks):
                 all_chunks.append({
-                    'uid': row['uid'],
-                    'chunk_id': i,
+                    'id': row['id'],  # Use id instead of uid
+                    'split_id': i,   # Use split_id instead of chunk_id
+                    'url': row['url'],  # Add url column
                     'chunk_text': chunk_text,
-                    'content_hash': row['content_hash']
+                    'last_scraped': now_timestamp  # Add last_scraped timestamp
                 })
         except Exception as e:
-            logger.error(f"Failed to chunk content for uid {row['uid']}: {e}")
-            log_failed_job(db_uri, row['uid'], 'chunking', e)
+            logger.error(f"Failed to chunk content for id {row['id']}: {e}")
+            log_failed_job(db_uri, row['id'], 'chunking', e)
 
 
     if not all_chunks:
@@ -138,17 +139,17 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
     except Exception as e:
         logger.error(f"Failed to generate embeddings: {e}")
         # Log failure for all UIDs in this batch
-        for uid in df['uid'].unique():
+        for uid in df['id'].unique():
             log_failed_job(db_uri, uid, 'embedding', e)
         return
 
 
     # Store in DB
     with engine.begin() as connection:
-        # First, delete old embeddings for these UIDs to handle content updates
-        uids_to_delete = chunks_df['uid'].unique().tolist()
-        if uids_to_delete:
-            connection.execute(text(f"DELETE FROM {table_name} WHERE uid = ANY(:uids)"), {'uids': uids_to_delete})
+        # First, delete old embeddings for these IDs to handle content updates
+        ids_to_delete = chunks_df['id'].unique().tolist()
+        if ids_to_delete:
+            connection.execute(text(f"DELETE FROM {table_name} WHERE id = ANY(:ids)"), {'ids': ids_to_delete})
         
         # Then, insert new embeddings
         chunks_df.to_sql(table_name, connection, if_exists='append', index=False, method='multi')

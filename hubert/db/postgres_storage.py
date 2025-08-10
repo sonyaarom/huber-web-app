@@ -256,11 +256,10 @@ class PostgresStorage(BaseStorage):
             if conn:
                 self.pool.putconn(conn)
 
-    def get_content_to_process_for_keywords(self) -> List[Tuple[str, str]]:
+    def get_content_to_process_for_keywords(self) -> List[Tuple[str, str, str]]:
         """Fetch content that needs keyword processing."""
         query = """
-            SELECT pc.id, pc.extracted_content FROM page_content pc
-            LEFT JOIN page_keywords pk ON pc.id = pk.id
+            SELECT pc.id, pc.url, pc.extracted_content FROM page_content pc
             LEFT JOIN page_keywords pk ON pc.id = pk.id
             WHERE pk.id IS NULL AND pc.extracted_content IS NOT NULL;
         """
@@ -330,22 +329,29 @@ class PostgresStorage(BaseStorage):
     
     def upsert_keywords(self, keyword_records: List[Dict[str, Any]]):
         """Insert or update tsvector keywords for content."""
-        if not keyword_records:
-            return
+        upsert_query = """
+            INSERT INTO page_keywords (id, url, last_modified, tokenized_text, raw_text, last_scraped) 
+            VALUES %s
+            ON CONFLICT (id) DO UPDATE SET
+                url = EXCLUDED.url,
+                last_modified = EXCLUDED.last_modified,
+                tokenized_text = EXCLUDED.tokenized_text,
+                raw_text = EXCLUDED.raw_text,
+                last_scraped = EXCLUDED.last_scraped;
+        """
         
+        values = []
+        for r in keyword_records:
+            values.append((
+                r['id'], r['url'], r['last_modified'], 
+                r['tokenized_text'], r['raw_text'], r['last_scraped']
+            ))
+
         conn = None
         try:
             conn = self.pool.getconn()
             with conn.cursor() as cursor:
-                cursor.execute("CREATE TEMP TABLE temp_keywords (uid TEXT, content TEXT) ON COMMIT DROP")
-                values = [(r['uid'], r['content']) for r in keyword_records]
-                execute_values(cursor, "INSERT INTO temp_keywords (uid, content) VALUES %s", values)
-                cursor.execute("DELETE FROM page_keywords pk USING temp_keywords tk WHERE pk.uid = tk.uid")
-                cursor.execute("""
-                    INSERT INTO page_keywords (id, uid, tokenized_text, raw_text, last_modified, last_scraped)
-                    SELECT gen_random_uuid()::text, uid, to_tsvector('simple', content), content, NOW(), NOW()
-                    FROM temp_keywords
-                """)
+                execute_values(cursor, upsert_query, values, page_size=100)
             conn.commit()
         finally:
             if conn:

@@ -70,7 +70,7 @@ if __name__ == "__main__":
             from datetime import datetime
             now_timestamp = datetime.now()
             
-            for page_content_id, raw_content in records:
+            for page_content_id, page_url, raw_content in records:
                 # Skip processing if content is empty
                 if not raw_content:
                     continue
@@ -78,10 +78,11 @@ if __name__ == "__main__":
                 processed_text = process_text_for_keyword_search(raw_content)
                 processed_data.append({
                     "id": page_content_id,  # Primary key for page_keywords table
-                    "uid": page_content_id,  # Reference to page_content.id
+                    "url": page_url,  # URL from page_content
                     "last_modified": now_timestamp,
                     "tokenized_text": processed_text,  # Will be converted to tsvector in SQL
-                    "raw_text": processed_text  # Store the processed text as raw_text too
+                    "raw_text": processed_text,  # Store the processed text as raw_text too
+                    "last_scraped": now_timestamp
                 })
 
             # 3. Perform a single bulk write operation to the database
