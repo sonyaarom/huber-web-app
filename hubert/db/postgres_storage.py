@@ -512,10 +512,10 @@ class PostgresStorage(BaseStorage):
     def upsert_keywords(self, keyword_records: List[Dict[str, Any]]):
         """Insert or update tsvector keywords for content."""
         upsert_query = """
-            INSERT INTO page_keywords (id, uid, last_modified, tokenized_text, raw_text) 
+            INSERT INTO page_keywords (id, url, last_modified, tokenized_text, raw_text, last_scraped) 
             VALUES %s
             ON CONFLICT (id) DO UPDATE SET
-                uid = EXCLUDED.uid,
+                url = EXCLUDED.url,
                 last_modified = EXCLUDED.last_modified,
                 tokenized_text = EXCLUDED.tokenized_text,
                 raw_text = EXCLUDED.raw_text,
@@ -525,8 +525,8 @@ class PostgresStorage(BaseStorage):
         values = []
         for r in keyword_records:
             values.append((
-                r['id'], r['uid'], r['last_modified'], 
-                r['tokenized_text'], r['raw_text']
+                r['id'], r['url'], r['last_modified'], 
+                r['tokenized_text'], r['raw_text'], r['last_scraped']
             ))
 
         conn = None
