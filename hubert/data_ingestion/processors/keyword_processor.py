@@ -67,6 +67,9 @@ if __name__ == "__main__":
             print(f"Found {len(records)} records to process for keywords.")
             # 2. Process the records in memory
             processed_data = []
+            from datetime import datetime
+            now_timestamp = datetime.now()
+            
             for page_content_id, raw_content in records:
                 # Skip processing if content is empty
                 if not raw_content:
@@ -74,8 +77,11 @@ if __name__ == "__main__":
                 
                 processed_text = process_text_for_keyword_search(raw_content)
                 processed_data.append({
-                    "page_content_id": page_content_id,
-                    "content": processed_text
+                    "id": page_content_id,  # Primary key for page_keywords table
+                    "uid": page_content_id,  # Reference to page_content.id
+                    "last_modified": now_timestamp,
+                    "tokenized_text": processed_text,  # Will be converted to tsvector in SQL
+                    "raw_text": processed_text  # Store the processed text as raw_text too
                 })
 
             # 3. Perform a single bulk write operation to the database
@@ -88,8 +94,13 @@ if __name__ == "__main__":
     except Exception as e:
         # Log the error for debugging
         print(f"An error occurred in the keyword processing job: {e}")
+        import traceback
+        traceback.print_exc()
         # Exit with a non-zero status code to indicate failure,
         # which can be picked up by orchestration tools like GitHub Actions.
         sys.exit(1)
     finally:
-        storage.close()
+        try:
+            storage.close()
+        except Exception as close_error:
+            print(f"Warning: Error closing storage connection: {close_error}")
