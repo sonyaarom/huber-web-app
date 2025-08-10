@@ -94,7 +94,7 @@ if __name__ == "__main__":
             processed_data = []
             now_timestamp = datetime.now()
             
-            for id, uid, url, last_updated in records_to_process:
+            for uid, url, last_updated in records_to_process:
                 logger.info(f"Processing URL: {url}")
                 try:
                     html_content = get_html_content(url)
@@ -117,7 +117,7 @@ if __name__ == "__main__":
                             entities[ent.label_].append(ent.text)
                     
                     processed_data.append({
-                        "id": id,
+                        "id": uid,
                         "url": url,
                         "html_content": clean_html,
                         "extracted_title": clean_title,

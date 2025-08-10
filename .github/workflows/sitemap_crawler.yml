@@ -50,14 +50,27 @@ jobs:
           python -m hubert.data_ingestion.huber_crawler.main | tee crawler_output.txt
           echo "::endgroup::"
 
+      - name: Run Content Extraction
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          echo "::group::Content Extraction Log"
+          python -m hubert.data_ingestion.huber_crawler.content_extractor | tee content_extractor_output.txt
+          echo "::endgroup::"
+
       - name: Upload logs and metrics as artifacts
         if: always() # Run this step even if the crawler fails
         uses: actions/upload-artifact@v4
         with:
           name: crawler-run-logs-${{ github.run_id }}
-          path: |
-            crawler_output.txt
-            crawler_metrics.json
+                      path: |
+              crawler_output.txt
+              content_extractor_output.txt
+              crawler_metrics.json
           retention-days: 7 # Keep logs for 7 days
 
       - name: Create job summary from metrics file
@@ -112,6 +125,13 @@ jobs:
           else
             echo "⚠️ Warning: crawler_output.txt not found, creating empty placeholder"
             echo "No crawler output generated on $(date)" > $METRICS_DIR/crawler_output.txt
+          fi
+
+          if [ -f "content_extractor_output.txt" ]; then
+            mv content_extractor_output.txt $METRICS_DIR/
+          else
+            echo "⚠️ Warning: content_extractor_output.txt not found, creating empty placeholder"
+            echo "No content extractor output generated on $(date)" > $METRICS_DIR/content_extractor_output.txt
           fi
 
           # Update historical metrics file

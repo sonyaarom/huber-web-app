@@ -35,9 +35,3 @@ def together_generator(question: str, context: str):
         messages=[{"role": "user", "content": prompt_text}],
     )
     return response.choices[0].message.content
-
-
-# if __name__ == "__main__":
-#     question = "What is the capital of France?"
-#     context = "France is a country in Western Europe. Its capital is Paris, which is known for its art, fashion, gastronomy and culture."
-#     print(together_generator(question, context))

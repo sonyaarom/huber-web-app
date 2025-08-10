@@ -16,7 +16,7 @@ echo ""
 
 # Check if environment file exists locally
 if [[ ! -f .venv.production ]]; then
-    echo "❌ Error: .venv.production file not found!"
+    echo "Error: .venv.production file not found!"
     echo "This file should be created by GitHub Actions."
     exit 1
 fi
@@ -31,11 +31,11 @@ HETZNER_USER=${HETZNER_USER:-root}
 HETZNER_SSH_KEY=${HETZNER_SSH_KEY:-/tmp/ssh_key}
 
 if [[ -z "$HETZNER_HOST" ]]; then
-    echo "❌ Error: HETZNER_HOST not set!"
+    echo "Error: HETZNER_HOST not set!"
     exit 1
 fi
 
-echo "🔗 Connecting to $HETZNER_USER@$HETZNER_HOST"
+echo "Connecting to $HETZNER_USER@$HETZNER_HOST"
 
 # Function to run commands on remote server
 run_remote() {
@@ -55,31 +55,31 @@ copy_to_remote() {
         "$1" "$HETZNER_USER@$HETZNER_HOST:$2"
 }
 
-echo "📋 Preparing deployment..."
+echo "Preparing deployment..."
 
 # Test SSH connection
-echo "🔌 Testing SSH connection..."
+echo "Testing SSH connection..."
 if ! run_remote "echo 'SSH connection successful'"; then
-    echo "❌ Failed to connect to server via SSH"
+    echo "Failed to connect to server via SSH"
     exit 1
 fi
 
 # Check if Docker is installed on the server
-echo "🐳 Checking Docker installation..."
+echo "Checking Docker installation..."
 if ! run_remote "command -v docker >/dev/null 2>&1"; then
-    echo "❌ Docker is not installed on the server!"
+    echo "Docker is not installed on the server!"
     echo "Please install Docker and docker-compose on your Hetzner server first."
     exit 1
 fi
 
 if ! run_remote "command -v docker-compose >/dev/null 2>&1 || command -v docker compose >/dev/null 2>&1"; then
-    echo "❌ docker-compose is not installed on the server!"
+    echo "docker-compose is not installed on the server!"
     echo "Please install docker-compose on your Hetzner server first."
     exit 1
 fi
 
 # Create backup of current deployment if it exists
-echo "💾 Creating backup of current deployment..."
+echo "Creating backup of current deployment..."
 run_remote "
     if [[ -d '$APP_DIR' ]]; then
         sudo mkdir -p '$BACKUP_DIR'
@@ -98,7 +98,7 @@ run_remote "
 "
 
 # Clone or update the repository
-echo "📥 Updating application code..."
+echo "Updating application code..."
 run_remote "
     cd '$APP_DIR'
     
@@ -123,11 +123,11 @@ run_remote "
 "
 
 # Copy environment file to server
-echo "⚙️  Uploading environment configuration..."
+echo "Uploading environment configuration..."
 copy_to_remote ".venv.production" "$APP_DIR/.venv"
 
 # Build and start the application
-echo "🚀 Building and starting the application..."
+echo "Building and starting the application..."
 run_remote "
     cd '$APP_DIR'
     
@@ -148,23 +148,23 @@ run_remote "
 "
 
 # Wait for application to start
-echo "⏳ Waiting for application to start..."
+echo "Waiting for application to start..."
 sleep 30
 
 # Health check
-echo "🏥 Performing health check..."
+echo "Performing health check..."
 max_attempts=10
 attempt=1
 
 while [[ $attempt -le $max_attempts ]]; do
     if run_remote "curl -f -s http://localhost:1234/health >/dev/null 2>&1"; then
-        echo "✅ Health check passed on attempt $attempt"
+        echo "Health check passed on attempt $attempt"
         break
     else
-        echo "⏳ Health check failed, attempt $attempt/$max_attempts"
+        echo "Health check failed, attempt $attempt/$max_attempts"
         if [[ $attempt -eq $max_attempts ]]; then
-            echo "❌ Health check failed after $max_attempts attempts"
-            echo "🔍 Checking container logs:"
+            echo "Health check failed after $max_attempts attempts"
+            echo "Checking container logs:"
             run_remote "cd '$APP_DIR' && docker-compose logs --tail=50"
             exit 1
         fi
@@ -175,9 +175,9 @@ done
 
 # Show final status
 echo ""
-echo "🎉 Deployment completed successfully!"
+echo "Deployment completed successfully!"
 echo ""
-echo "📊 Final status:"
+echo "Final status:"
 run_remote "
     cd '$APP_DIR'
     echo '--- Container Status ---'
@@ -191,7 +191,7 @@ run_remote "
 "
 
 echo ""
-echo "🌐 Application should be available at: http://$HETZNER_HOST:1234"
-echo "📝 Backup created at: $BACKUP_DIR (on server)"
+echo "Application should be available at: http://$HETZNER_HOST:1234"
+echo "Backup created at: $BACKUP_DIR (on server)"
 echo ""
-echo "✨ Deployment completed successfully!" 
+echo "Deployment completed successfully!" 

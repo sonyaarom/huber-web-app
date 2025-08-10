@@ -1,9 +1,6 @@
 name: Deploy to Hetzner Server
 
 on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*' ]
   workflow_dispatch:  # Allow manual triggering
 
 env:
