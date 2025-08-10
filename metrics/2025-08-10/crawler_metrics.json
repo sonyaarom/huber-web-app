@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-08-10T20:02:23.285609",
-  "total_runtime_seconds": 11.232277870178223,
-  "sitemap_processing_time_seconds": 7.324527263641357,
-  "database_update_time_seconds": 2.385759115219116,
+  "timestamp": "2025-08-10T20:18:59.165610",
+  "total_runtime_seconds": 8.35687518119812,
+  "sitemap_processing_time_seconds": 3.608227014541626,
+  "database_update_time_seconds": 3.269434690475464,
   "total_urls_found": 1013,
   "new_urls": 0,
   "updated_urls": 0,
