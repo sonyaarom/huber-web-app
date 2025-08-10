@@ -1,9 +1,11 @@
 import hashlib
 import logging
+import sys
 import pandas as pd
 from sqlalchemy import create_engine, text
 from hubert.common.utils.text_utils import process_text_for_keyword_search
 from hubert.config import settings
+from hubert.db.postgres_storage import PostgresStorage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,7 +72,7 @@ if __name__ == "__main__":
                 if not raw_content:
                     continue
                 
-                processed_text = process_text_for_keywords(raw_content)
+                processed_text = process_text_for_keyword_search(raw_content)
                 processed_data.append({
                     "page_content_id": page_content_id,
                     "content": processed_text
