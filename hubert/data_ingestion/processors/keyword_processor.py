@@ -75,15 +75,21 @@ if __name__ == "__main__":
             from datetime import datetime
             now_timestamp = datetime.now()
             
-            for page_content_id, page_url, raw_content in records:
+            # Work with the 2-value tuples we're actually getting: (id, content)
+            for page_content_id, raw_content in records:
                 # Skip processing if content is empty
                 if not raw_content:
                     continue
                 
+                # Get URL from page_raw table
+                url_query = "SELECT url FROM page_raw WHERE id = %s"
+                url_result = storage._execute_query(url_query, (page_content_id,), fetch='one')
+                page_url = url_result[0] if url_result else ''
+                
                 processed_text = process_text_for_keyword_search(raw_content)
                 processed_data.append({
                     "id": page_content_id,  # Primary key for page_keywords table
-                    "url": page_url,  # URL from page_content
+                    "url": page_url,  # URL from page_raw
                     "last_modified": now_timestamp,
                     "tokenized_text": processed_text,  # Will be converted to tsvector in SQL
                     "raw_text": processed_text,  # Store the processed text as raw_text too

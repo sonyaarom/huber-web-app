@@ -51,8 +51,8 @@ class BaseStorage(ABC):
         pass
 
     @abstractmethod
-    def get_content_to_process_for_keywords(self) -> List[Tuple[str, str, str]]:
-        """Fetch content that needs keyword processing."""
+    def get_content_to_process_for_keywords(self) -> List[Tuple[str, str]]:
+        """Fetch content that needs keyword processing. Returns (id, content) tuples."""
         pass
 
     @abstractmethod
