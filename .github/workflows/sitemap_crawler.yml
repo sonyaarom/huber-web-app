@@ -67,10 +67,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: crawler-run-logs-${{ github.run_id }}
-                      path: |
-              crawler_output.txt
-              content_extractor_output.txt
-              crawler_metrics.json
+          path: |
+            crawler_output.txt
+            content_extractor_output.txt
+            crawler_metrics.json
           retention-days: 7 # Keep logs for 7 days
 
       - name: Create job summary from metrics file
