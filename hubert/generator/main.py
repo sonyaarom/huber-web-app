@@ -27,7 +27,7 @@ def main_generator(question: str, context: str, model_type: str = "openai"):
 
     # LLM GENERATION STAGE
     generation_start = time.time()
-    text = generate_answer(llm=llm, 
+    response = generate_answer(llm=llm, 
                        generation_type='openai',
                        prompt_text=prompt_text, 
                        max_tokens=256, 
@@ -35,6 +35,12 @@ def main_generator(question: str, context: str, model_type: str = "openai"):
     generation_duration = time.time() - generation_start
     logger.info(f"LLM generation took {generation_duration:.2f} seconds.")
 
+    # Extract text from the response structure
+    if isinstance(response, dict) and 'choices' in response and len(response['choices']) > 0:
+        text = response['choices'][0].get('text', str(response))
+    else:
+        text = str(response)
+    
     return text
 
 

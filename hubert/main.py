@@ -27,6 +27,40 @@ def get_generator_function():
         logger.warning(f"Unknown generator type '{generator_type}', defaulting to 'together'")
         return together_generator
 
+def normalize_generator_response(response):
+    """
+    Normalize different generator response formats to a consistent string output.
+    
+    Args:
+        response: Can be a string, dict with choices, or other format
+        
+    Returns:
+        str: The extracted text response
+    """
+    if isinstance(response, str):
+        # Already a string, return as-is
+        return response
+    elif isinstance(response, dict):
+        # Handle OpenAI-style response format
+        if 'choices' in response and isinstance(response['choices'], list) and len(response['choices']) > 0:
+            choice = response['choices'][0]
+            if isinstance(choice, dict) and 'text' in choice:
+                return choice['text']
+            elif isinstance(choice, dict) and 'message' in choice and 'content' in choice['message']:
+                return choice['message']['content']
+        # Handle other dict formats - try to extract text content
+        if 'text' in response:
+            return response['text']
+        if 'content' in response:
+            return response['content']
+        # If no recognizable format, convert to string
+        logger.warning(f"Unknown response format: {type(response)}, converting to string")
+        return str(response)
+    else:
+        # For any other type, convert to string
+        logger.warning(f"Unexpected response type: {type(response)}, converting to string")
+        return str(response)
+
 def create_retriever() -> HybridRetriever:
     """
     Creates a new retriever instance based on the current settings.
@@ -118,15 +152,20 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
             # GENERATION PHASE
             generation_start = time.time()
             with sentry_sdk.start_span(op="generation", description="LLM generation"):
-                answer = get_generator_function()(question, context)
+                raw_answer = get_generator_function()(question, context)
+                answer = normalize_generator_response(raw_answer)
             
             generation_duration = time.time() - generation_start
             logger.info(f"Overall generation phase took {generation_duration:.2f} seconds.")
             
+            # Debug logging for response format
+            logger.debug(f"Raw generator response type: {type(raw_answer)}")
+            logger.debug(f"Normalized answer type: {type(answer)}, length: {len(answer) if isinstance(answer, str) else 'N/A'}")
+            
             # Capture generation metrics
             capture_generation_metrics(
                 prompt_length=len(question) + len(context),
-                response_length=len(answer),
+                response_length=len(answer) if isinstance(answer, str) else 0,
                 duration=generation_duration
             )
             

@@ -756,7 +756,16 @@ def handle_message(message):
                 
                 # Emit a single event with both answer and URLs
                 emit('response', response_data)
-                logger.info(f"Sending response with {len(response_data.get('sources', []))} sources: {response_data['answer'][:100]}...")
+                
+                # Safe slicing for logging
+                answer_preview = ""
+                if isinstance(response_data.get('answer'), str):
+                    answer_preview = response_data['answer'][:100] + "..." if len(response_data['answer']) > 100 else response_data['answer']
+                else:
+                    answer_preview = str(response_data.get('answer', ''))[:100] + "..."
+                
+                logger.info(f"Sending response with {len(response_data.get('sources', []))} sources: {answer_preview}")
+                
             elif isinstance(response_data, str):
                 # If it's just a string, emit it as a message
                 response_with_metadata = {
@@ -769,7 +778,11 @@ def handle_message(message):
                     'sources': []
                 }
                 emit('response', response_with_metadata)
-                logger.info(f"Sending message: {response_data[:100]}...")
+                
+                # Safe slicing for logging
+                message_preview = response_data[:100] + "..." if len(response_data) > 100 else response_data
+                logger.info(f"Sending message: {message_preview}")
+                
             else:
                 # Fallback: convert to string and send as message
                 response_str = str(response_data)
@@ -783,7 +796,10 @@ def handle_message(message):
                     'sources': []
                 }
                 emit('response', response_with_metadata)
-                logger.info(f"Sending converted message: {response_str[:100]}...")
+                
+                # Safe slicing for logging
+                converted_preview = response_str[:100] + "..." if len(response_str) > 100 else response_str
+                logger.info(f"Sending converted message: {converted_preview}")
             
         except Exception as e:
             logger.error(f"Error processing message: {e}")
