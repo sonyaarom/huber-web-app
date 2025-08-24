@@ -6,6 +6,9 @@ from .config import settings, reload_settings
 import time
 import sentry_sdk
 from .common.monitoring import capture_rag_operation, capture_retrieval_metrics, capture_generation_metrics
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_retriever() -> HybridRetriever:
     """
@@ -77,6 +80,7 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
                 retrieved_docs = retriever.retrieve(question, filters=ner_filters)
             
             retrieval_duration = time.time() - retrieval_start
+            logger.info(f"Overall retrieval phase took {retrieval_duration:.2f} seconds.")
             
             # Capture retrieval metrics
             scores = []
@@ -88,8 +92,11 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
             sentry_sdk.set_measurement("retrieval_duration", retrieval_duration, "second")
             
             # CONTEXT PROCESSING
+            context_start = time.time()
             with sentry_sdk.start_span(op="processing", description="Context processing"):
                 context = " ".join([doc['content'] for doc in retrieved_docs])
+            context_duration = time.time() - context_start
+            logger.info(f"Context processing took {context_duration:.3f} seconds.")
             
             # GENERATION PHASE
             generation_start = time.time()
@@ -97,6 +104,7 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
                 answer = llm_main_func(question, context)
             
             generation_duration = time.time() - generation_start
+            logger.info(f"Overall generation phase took {generation_duration:.2f} seconds.")
             
             # Capture generation metrics
             capture_generation_metrics(

@@ -180,10 +180,18 @@ class EmbeddingGenerator:
         Returns:
             List of embedding vectors
         """
+        import time
+        start_time = time.time()
+        
         if self.method == "local":
-            return self._generate_local_embeddings(texts)
+            result = self._generate_local_embeddings(texts)
         elif self.method == "openai":
-            return self._generate_openai_embeddings(texts)
+            result = self._generate_openai_embeddings(texts)
+            
+        duration = time.time() - start_time
+        logger.info(f"EmbeddingGenerator ({self.method}) processed {len(texts)} texts in {duration:.3f} seconds.")
+        
+        return result
     
     def _generate_local_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings using local HuggingFace model."""
@@ -235,7 +243,10 @@ class EmbeddingGenerator:
     
     def _generate_openai_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings using OpenAI API."""
+        import time
         embeddings = []
+        total_api_time = 0
+        
         for i in tqdm(range(0, len(texts), self.batch_size), desc="Generating OpenAI embeddings"):
             batch_texts = texts[i:i+self.batch_size]
 
@@ -246,15 +257,27 @@ class EmbeddingGenerator:
 
             try:
                 # Use the cleaned_batch instead of batch_texts
+                api_start = time.time()
                 response = self.client.embeddings.create(
                     input=cleaned_batch,
                     model=self.model_name
                 )
+                api_duration = time.time() - api_start
+                total_api_time += api_duration
+                
                 batch_embeddings = [item.embedding for item in response.data]
                 embeddings.extend(batch_embeddings)
+                
+                if len(texts) > 10:  # Only log batch details for larger requests
+                    logger.debug(f"OpenAI API batch {i//self.batch_size + 1}: {len(cleaned_batch)} texts in {api_duration:.3f}s")
+                    
             except Exception as e:
                 logger.error(f"Error with OpenAI API: {e}")
                 raise
+                
+        if len(texts) > 1:  # Log summary for multi-text requests
+            logger.info(f"OpenAI API total time: {total_api_time:.3f}s for {len(embeddings)} embeddings")
+            
         return embeddings
     
     def cleanup(self):

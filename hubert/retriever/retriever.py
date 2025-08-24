@@ -108,16 +108,30 @@ class HybridRetriever:
             
         start_time = time.time()
         
+        # EMBEDDING GENERATION STAGE
+        embedding_start = time.time()
         query_embedding = self.embedding_generator.generate_embeddings([query])[0]
+        embedding_duration = time.time() - embedding_start
+        logger.info(f"Embedding generation took {embedding_duration:.2f} seconds.")
         
         retrieval_limit = self.top_k * 3 if self.use_hybrid_search else self.top_k * 2 if self.use_reranker else self.top_k
 
+        # VECTOR SEARCH STAGE
+        vector_search_start = time.time()
         vector_results = self.storage.vector_search(self.table_name, query_embedding, limit=retrieval_limit, filters=filters)
+        vector_search_duration = time.time() - vector_search_start
+        logger.info(f"Vector search took {vector_search_duration:.2f} seconds.")
         
         if self.use_hybrid_search:
+            # BM25 SEARCH STAGE
+            bm25_start = time.time()
             bm25_query_text = process_text(query)
             bm25_results = self.storage.keyword_search(bm25_query_text, limit=retrieval_limit, filters=filters)
+            bm25_duration = time.time() - bm25_start
+            logger.info(f"BM25 search took {bm25_duration:.2f} seconds.")
             
+            # HYBRID SCORING STAGE
+            hybrid_start = time.time()
             # Combine and normalize scores
             all_docs: Dict[Any, Dict[str, Any]] = {}
             for res in vector_results:
@@ -142,18 +156,24 @@ class HybridRetriever:
             # Sort by combined score
             combined_results.sort(key=lambda x: x['score'], reverse=True)
             final_results = combined_results
+            hybrid_duration = time.time() - hybrid_start
+            logger.info(f"Hybrid scoring took {hybrid_duration:.2f} seconds.")
         else:
             final_results = vector_results
             for res in final_results:
                 res['score'] = res.pop('similarity')
 
         if self.use_reranker and self.reranker:
+            # RERANKING STAGE
+            reranking_start = time.time()
             pairs = [[query, res['content']] for res in final_results]
             if pairs:
                 scores = self.reranker.predict(pairs)
                 for i, res in enumerate(final_results):
                     res['reranked_score'] = scores[i]
                 final_results.sort(key=lambda x: x.get('reranked_score', 0), reverse=True)
+            reranking_duration = time.time() - reranking_start
+            logger.info(f"Reranking took {reranking_duration:.2f} seconds.")
 
         logger.info(f"Retrieval took {time.time() - start_time:.2f} seconds.")
         return final_results[:self.top_k]
