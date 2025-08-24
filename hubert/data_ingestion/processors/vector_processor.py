@@ -35,7 +35,7 @@ def main():
     logger.info(f"Using {args.chunking_method} chunking with size {args.chunk_size}")
 
     # Build DB URI from settings
-    db_uri = f"postgresql://{settings.db_username}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+    db_uri = settings.DATABASE_URL
 
     # Normalize chunk strategy name to match get_chunking_strategy
     strategy_name = args.chunking_method

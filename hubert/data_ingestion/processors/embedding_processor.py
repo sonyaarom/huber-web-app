@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 def get_session(db_uri):
     """Creates and returns a new SQLAlchemy session."""
-    engine = create_engine(db_uri)
+    engine = create_engine(db_uri, pool_pre_ping=True)
     Session = sessionmaker(bind=engine)
     return Session()
 
@@ -72,7 +72,7 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
     If uids are provided, it processes only those. Otherwise, it looks for content
     that hasn't been processed yet.
     """
-    engine = create_engine(db_uri)
+    engine = create_engine(db_uri, pool_pre_ping=True)
 
     if uids:
         logger.info(f"Processing specific UIDs: {uids}")
@@ -135,6 +135,19 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
     embedding_generator = EmbeddingGenerator(method=settings.embedding_method, model_name=settings.embedding_model)
     try:
         embeddings = embedding_generator.generate_embeddings(chunks_df['chunk_text'].tolist())
+        
+        # Validate embedding dimensions match database schema
+        if embeddings:
+            expected_dim = 1536  # page_embeddings_a table expects 1536 dimensions
+            actual_dim = len(embeddings[0])
+            if actual_dim != expected_dim:
+                raise ValueError(
+                    f"Embedding dimension mismatch: model '{settings.embedding_model}' produces "
+                    f"{actual_dim} dimensions, but table '{table_name}' expects {expected_dim} dimensions. "
+                    f"Either change EMBEDDING_MODEL to 'text-embedding-3-small' or update database schema."
+                )
+            logger.info(f"Validated embedding dimensions: {actual_dim}")
+        
         chunks_df['embedding'] = embeddings
     except Exception as e:
         logger.error(f"Failed to generate embeddings: {e}")
@@ -149,7 +162,23 @@ def process_and_store_embeddings(db_uri: str, table_name: str, chunk_strategy_na
         # First, delete old embeddings for these IDs to handle content updates
         ids_to_delete = chunks_df['id'].unique().tolist()
         if ids_to_delete:
-            connection.execute(text(f"DELETE FROM {table_name} WHERE id = ANY(:ids)"), {'ids': ids_to_delete})
+            # Batch deletes to avoid oversized query parameters and reduce SSL drop risk
+            batch_size = 500
+            delete_sql = text(f"DELETE FROM {table_name} WHERE id = ANY(:ids)")
+            for i in range(0, len(ids_to_delete), batch_size):
+                batch = ids_to_delete[i:i+batch_size]
+                # Simple retry for transient connection issues
+                attempts = 0
+                while True:
+                    try:
+                        connection.execute(delete_sql, {'ids': batch})
+                        break
+                    except Exception as e:
+                        attempts += 1
+                        if attempts >= 3:
+                            raise
+                        logger.warning(f"Retrying delete batch due to error: {e}")
+                        time.sleep(1.5)
         
         # Then, insert new embeddings
         chunks_df.to_sql(table_name, connection, if_exists='append', index=False, method='multi')
@@ -169,7 +198,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    db_uri = f"postgresql://{settings.db_username}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+    db_uri = settings.DATABASE_URL
     chunk_options = {
         'chunk_size': args.chunk_size,
         'chunk_overlap': args.chunk_overlap

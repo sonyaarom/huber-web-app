@@ -43,13 +43,30 @@ class PostgresStorage(BaseStorage):
     def _build_dsn(db_params: Dict[str, Any]) -> str:
         """Build the data source name (DSN) for PostgreSQL connection."""
         encoded_password = quote_plus(str(db_params['password']))
-        return (
-            f"host={db_params['host']} "
-            f"port={db_params['port']} "
-            f"dbname={db_params['dbname']} "
-            f"user={db_params['user']} "
-            f"password={encoded_password}"
-        )
+        host = str(db_params['host'])
+        # Determine sslmode
+        from hubert.config import settings as _settings
+        sslmode = getattr(_settings, 'db_sslmode', None)
+        if not sslmode:
+            host_lower = host.lower()
+            if any(h in host_lower for h in ["supabase.com", "neon.tech", "render.com", "aws-", "gcp-", "azure-"]):
+                sslmode = "require"
+
+        parts = [
+            f"host={host}",
+            f"port={db_params['port']}",
+            f"dbname={db_params['dbname']}",
+            f"user={db_params['user']}",
+            f"password={encoded_password}",
+            # TCP keepalives to reduce idle connection drops on cloud providers
+            "keepalives=1",
+            "keepalives_idle=30",
+            "keepalives_interval=10",
+            "keepalives_count=5",
+        ]
+        if sslmode:
+            parts.append(f"sslmode={sslmode}")
+        return " ".join(parts)
 
     def connect(self):
         """Establish a connection to the data store."""

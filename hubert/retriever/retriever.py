@@ -33,7 +33,7 @@ class HybridRetriever:
     Production-ready retriever that combines vector search with BM25 and applies reranking.
     
     This retriever is configured to use:
-    - OpenAI's text-embedding-3-large model for embeddings
+    - OpenAI's text-embedding-3-small model for embeddings (1536 dimensions)
     - Recursive chunking with 512 token chunks
     - Hybrid search with alpha=0.5 (50% vector search, 50% BM25)
     - Cross-encoder reranking

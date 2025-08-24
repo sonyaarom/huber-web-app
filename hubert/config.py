@@ -14,14 +14,28 @@ class Settings(BaseSettings):
     db_name: str = Field(env='DB_NAME', default='huber_db')
     db_username: str = Field(env='DB_USERNAME', default='postgres')
     db_password: str = Field(env='DB_PASSWORD', default='password')
+    db_sslmode: Optional[str] = Field(env='DB_SSLMODE', default=None)
 
     @computed_field
     @property
     def DATABASE_URL(self) -> str:
         """
         Constructs the full database URL from individual components.
+        Adds sslmode when appropriate.
         """
-        return f"postgresql+psycopg2://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        base_url = (
+            f"postgresql+psycopg2://{self.db_username}:{self.db_password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
+        # Determine sslmode
+        sslmode = self.db_sslmode
+        if sslmode is None:
+            host_lower = (self.db_host or "").lower()
+            if any(h in host_lower for h in ["supabase.com", "neon.tech", "render.com", "aws-", "gcp-", "azure-"]):
+                sslmode = "require"
+        if sslmode:
+            return f"{base_url}?sslmode={sslmode}"
+        return base_url
 
     # --------------------------------------------------------------------------
     # API Keys
@@ -68,7 +82,7 @@ class Settings(BaseSettings):
     # --------------------------------------------------------------------------
     # Retriever Settings
     # --------------------------------------------------------------------------
-    embedding_model: str = Field(env='EMBEDDING_MODEL', default='text-embedding-3-large')
+    embedding_model: str = Field(env='EMBEDDING_MODEL', default='text-embedding-3-small')
     embedding_method: str = Field(env='EMBEDDING_METHOD', default='openai')
     table_name: str = Field(env='TABLE_NAME', default='page_embeddings_a')
     top_k: int = Field(env='TOP_K', default=10)

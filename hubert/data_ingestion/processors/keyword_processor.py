@@ -19,7 +19,7 @@ def process_and_store_keywords(db_uri, uids):
         logger.info("No new UIDs to process for keywords.")
         return
 
-    engine = create_engine(db_uri)
+    engine = create_engine(db_uri, pool_pre_ping=True)
     
     # Fetch content and compute hash
     query = text("SELECT uid, extracted_content FROM page_content WHERE uid = ANY(:uids)")
