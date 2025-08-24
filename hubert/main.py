@@ -1,6 +1,6 @@
 from functools import lru_cache
 from .retriever import HybridRetriever
-from .generator.main import together_generator as llm_main_func
+from .generator.main import together_generator, main_generator
 from typing import Optional, Dict, Any, List
 from .config import settings, reload_settings
 import time
@@ -9,6 +9,23 @@ from .common.monitoring import capture_rag_operation, capture_retrieval_metrics,
 import logging
 
 logger = logging.getLogger(__name__)
+
+def get_generator_function():
+    """
+    Get the appropriate generator function based on the configuration.
+    Always uses fresh settings to ensure dynamic switching works.
+    """
+    # Reload settings to ensure we get the latest configuration
+    current_settings = reload_settings()
+    generator_type = current_settings.generator_type.lower()
+    
+    if generator_type == 'together':
+        return together_generator
+    elif generator_type == 'openai':
+        return lambda question, context: main_generator(question, context, model_type="openai")
+    else:
+        logger.warning(f"Unknown generator type '{generator_type}', defaulting to 'together'")
+        return together_generator
 
 def create_retriever() -> HybridRetriever:
     """
@@ -101,7 +118,7 @@ def rag_main_func(question: str, ner_filters: Optional[Dict[str, List[str]]] = N
             # GENERATION PHASE
             generation_start = time.time()
             with sentry_sdk.start_span(op="generation", description="LLM generation"):
-                answer = llm_main_func(question, context)
+                answer = get_generator_function()(question, context)
             
             generation_duration = time.time() - generation_start
             logger.info(f"Overall generation phase took {generation_duration:.2f} seconds.")

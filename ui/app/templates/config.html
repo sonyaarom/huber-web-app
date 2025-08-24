@@ -53,6 +53,9 @@
         <div class="current-config">
             <h3>Current Configuration</h3>
             <div class="config-item">
+                <strong>Generator Type:</strong> {{ config.generator_type.title() }}
+            </div>
+            <div class="config-item">
                 <strong>NER Filtering:</strong> {{ 'Enabled' if config.use_ner == True else 'Disabled' }}
             </div>
             <div class="config-item">
@@ -72,6 +75,14 @@
         <p>Modify settings for experimentation. Changes are saved to the <code>.venv</code> file.</p>
         
         <form action="{{ url_for('main.config') }}" method="post">
+            <div class="form-group">
+                <label for="generator_type">Generator Type</label>
+                <select id="generator_type" name="generator_type" style="width: 100%; padding: 0.5em; box-sizing: border-box;">
+                    <option value="together" {% if config.generator_type == 'together' %}selected{% endif %}>Together API (Llama)</option>
+                    <option value="openai" {% if config.generator_type == 'openai' %}selected{% endif %}>OpenAI (GPT-3.5-turbo)</option>
+                </select>
+            </div>
+            
             <div class="form-group">
                 <label for="embedding_model">Embedding Model</label>
                 <input type="text" id="embedding_model" name="embedding_model" value="{{ config.embedding_model }}">

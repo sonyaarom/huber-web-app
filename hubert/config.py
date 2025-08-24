@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     # --------------------------------------------------------------------------
     # Generator Settings
     # --------------------------------------------------------------------------
+    generator_type: str = Field(env='GENERATOR_TYPE', default='together')  # 'together' or 'openai'
     gpu_devices: Optional[str] = Field(env='GPU_DEVICES', default="0")
     n_gpu_layers: Optional[int] = Field(env='N_GPU_LAYERS', default=80)
     context_length: Optional[int] = Field(env='CONTEXT_LENGTH', default=4096)
