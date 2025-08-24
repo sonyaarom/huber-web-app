@@ -42,13 +42,53 @@ jobs:
         EOF
         
         # Setup SSH key with proper format handling
-        echo "${{ secrets.HETZNER_SSH_KEY }}" > /tmp/ssh_key
+        # Use printf to preserve exact formatting and handle newlines correctly
+        printf '%s\n' "${{ secrets.HETZNER_SSH_KEY }}" > /tmp/ssh_key
         chmod 600 /tmp/ssh_key
+        
+        # Additional SSH key validation and formatting
+        echo "Validating SSH key format..."
+        
+        # Check if key starts with proper header
+        if ! grep -q "BEGIN.*PRIVATE KEY" /tmp/ssh_key; then
+          echo "Error: SSH key doesn't contain proper BEGIN header"
+          echo "First few lines of the key:"
+          head -3 /tmp/ssh_key | sed 's/./*/g'  # Mask the actual key content
+          exit 1
+        fi
+        
+        # Check if key ends with proper footer
+        if ! grep -q "END.*PRIVATE KEY" /tmp/ssh_key; then
+          echo "Error: SSH key doesn't contain proper END footer"
+          echo "Last few lines of the key:"
+          tail -3 /tmp/ssh_key | sed 's/./*/g'  # Mask the actual key content
+          exit 1
+        fi
+        
+        # Try to load the key with ssh-add for additional validation
+        eval $(ssh-agent -s)
+        if ! ssh-add /tmp/ssh_key 2>/dev/null; then
+          echo "Error: SSH key cannot be loaded by ssh-agent"
+          echo "This usually indicates a formatting or encoding issue"
+          exit 1
+        fi
+        ssh-agent -k  # Kill the agent after testing
         
         # Validate SSH key format
         if ! ssh-keygen -l -f /tmp/ssh_key >/dev/null 2>&1; then
           echo "Error: Invalid SSH key format in HETZNER_SSH_KEY secret"
           echo "Please ensure the SSH key is properly formatted with correct BEGIN/END markers"
+          echo ""
+          echo "Expected format:"
+          echo "-----BEGIN OPENSSH PRIVATE KEY-----"
+          echo "[key content]"
+          echo "-----END OPENSSH PRIVATE KEY-----"
+          echo ""
+          echo "To fix this issue:"
+          echo "1. Generate a new SSH key: ssh-keygen -t ed25519 -C 'github-actions-deploy'"
+          echo "2. Add the public key to your server: ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server"
+          echo "3. Copy the private key content: cat ~/.ssh/id_ed25519"
+          echo "4. Paste the entire output (including BEGIN/END lines) into the HETZNER_SSH_KEY secret"
           exit 1
         fi
         
@@ -111,14 +151,23 @@ jobs:
     - name: Test SSH Connection
       run: |
         # Test SSH connection to server
-        echo "🔌 Testing SSH connection to ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}..."
+        echo "Testing SSH connection to ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}..."
         
-        if ssh -o ConnectTimeout=30 \
+        # Add SSH debugging for troubleshooting
+        echo "SSH key info:"
+        ssh-keygen -l -f /tmp/ssh_key 2>/dev/null || echo "Failed to read SSH key fingerprint"
+        
+        # Test SSH connection with verbose output for debugging
+        echo "Attempting SSH connection..."
+        if ssh -v -o ConnectTimeout=30 \
                -o StrictHostKeyChecking=no \
                -o UserKnownHostsFile=/dev/null \
+               -o PasswordAuthentication=no \
+               -o PubkeyAuthentication=yes \
+               -o PreferredAuthentications=publickey \
                -i /tmp/ssh_key \
                ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} \
-               "echo 'SSH connection successful'"; then
+               "echo 'SSH connection successful'" 2>&1; then
           echo "SSH connection test passed"
         else
           echo "SSH connection failed!"
@@ -129,6 +178,12 @@ jobs:
           echo "3. Ensure the public key is added to ~/.ssh/authorized_keys on the server"
           echo "4. Check server firewall allows SSH connections (port 22)"
           echo "5. Verify the server is running and accessible"
+          echo ""
+          echo "SSH Key troubleshooting:"
+          echo "- Regenerate SSH key with: ssh-keygen -t ed25519 -C 'github-actions-deploy'"
+          echo "- Add public key to server: ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server"
+          echo "- Copy private key content: cat ~/.ssh/id_ed25519"
+          echo "- Ensure the secret contains the complete key including BEGIN/END lines"
           exit 1
         fi
     

@@ -91,7 +91,7 @@ run_remote "
 "
 
 # Prepare the application directory
-echo "📁 Preparing application directory..."
+echo "Preparing application directory..."
 run_remote "
     sudo mkdir -p '$APP_DIR'
     sudo chown -R ${HETZNER_USER:-root}:${HETZNER_USER:-root} '$APP_DIR'
